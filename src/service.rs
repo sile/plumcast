@@ -20,6 +20,7 @@ type LocalNodes = Arc<AtomicImmut<HashMap<NodeName, NodeHandle>>>;
 #[derive(Debug)]
 pub struct ServiceBuilder {
     logger: Logger,
+    server_addr: SocketAddr,
     rpc_server_builder: RpcServerBuilder,
     rpc_client_service_builder: RpcClientServiceBuilder,
 }
@@ -27,6 +28,7 @@ impl ServiceBuilder {
     pub fn new(rpc_server_bind_addr: SocketAddr) -> Self {
         ServiceBuilder {
             logger: Logger::root(Discard, o!()),
+            server_addr: rpc_server_bind_addr,
             rpc_server_builder: RpcServerBuilder::new(rpc_server_bind_addr),
             rpc_client_service_builder: RpcClientServiceBuilder::new(),
         }
@@ -49,6 +51,7 @@ impl ServiceBuilder {
 
         Service {
             logger: self.logger.clone(),
+            server_addr: self.server_addr,
             command_tx,
             command_rx,
             rpc_server,
@@ -61,6 +64,7 @@ impl ServiceBuilder {
 #[derive(Debug)]
 pub struct Service<S> {
     logger: Logger,
+    server_addr: SocketAddr,
     command_tx: mpsc::Sender<Command>,
     command_rx: mpsc::Receiver<Command>, // NOTE: infinite stream
     rpc_server: RpcServer<S>,
@@ -77,6 +81,7 @@ where
 
     pub fn handle(&self) -> ServiceHandle {
         ServiceHandle {
+            server_addr: self.server_addr,
             command_tx: self.command_tx.clone(),
             rpc_client_service: self.rpc_client_service.handle(),
             local_nodes: Arc::clone(&self.local_nodes),
@@ -130,6 +135,7 @@ where
 
 #[derive(Debug)]
 pub struct ServiceHandle {
+    pub server_addr: SocketAddr, // TODO
     command_tx: mpsc::Sender<Command>,
     rpc_client_service: RpcClientServiceHandle,
     local_nodes: LocalNodes,
