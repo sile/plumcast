@@ -6,17 +6,19 @@ use fibers_rpc::client::{
     ClientServiceHandle as RpcClientServiceHandle,
 };
 use fibers_rpc::server::{Server as RpcServer, ServerBuilder as RpcServerBuilder};
+use fibers_rpc::Cast;
 use futures::{Async, Future, Poll, Stream};
 use slog::{Discard, Logger};
 use std::collections::HashMap;
 use std::net::SocketAddr;
+use std::sync::atomic::{AtomicUsize, Ordering};
 use std::sync::Arc;
 
-use node::{NodeHandle, NodeId, NodeName};
-use rpc::RpcMessage;
+use node::{LocalNodeId, NodeHandle, NodeId};
+use rpc::{self, RpcMessage};
 use {Error, ErrorKind};
 
-type LocalNodes = Arc<AtomicImmut<HashMap<NodeName, NodeHandle>>>;
+type LocalNodes = Arc<AtomicImmut<HashMap<LocalNodeId, NodeHandle>>>;
 
 #[derive(Debug)]
 pub struct ServiceBuilder {
@@ -58,6 +60,7 @@ impl ServiceBuilder {
             rpc_server,
             rpc_client_service,
             local_nodes: Default::default(),
+            next_local_id: Arc::new(AtomicUsize::new(0)),
         }
     }
 }
@@ -71,6 +74,7 @@ pub struct Service<S> {
     rpc_server: RpcServer<S>,
     rpc_client_service: RpcClientService,
     local_nodes: LocalNodes,
+    next_local_id: Arc<AtomicUsize>,
 }
 impl<S> Service<S>
 where
@@ -86,6 +90,7 @@ where
             command_tx: self.command_tx.clone(),
             rpc_client_service: self.rpc_client_service.handle(),
             local_nodes: Arc::clone(&self.local_nodes),
+            next_local_id: Arc::clone(&self.next_local_id),
         }
     }
 
@@ -95,7 +100,7 @@ where
                 info!(self.logger, "Registers a local node: {:?}", node);
                 self.local_nodes.update(|nodes| {
                     let mut nodes = (*nodes).clone();
-                    nodes.insert(node.name().clone(), node.clone());
+                    nodes.insert(node.local_id(), node.clone());
                     nodes
                 });
             }
@@ -136,29 +141,67 @@ where
 
 #[derive(Debug)]
 pub struct ServiceHandle {
-    pub server_addr: SocketAddr, // TODO
+    server_addr: SocketAddr,
     command_tx: mpsc::Sender<Command>,
     rpc_client_service: RpcClientServiceHandle,
     local_nodes: LocalNodes,
+    next_local_id: Arc<AtomicUsize>,
 }
 impl ServiceHandle {
+    pub(crate) fn generate_node_id(&self) -> NodeId {
+        let local_id = LocalNodeId::new(self.next_local_id.fetch_add(1, Ordering::SeqCst) as u64);
+        NodeId {
+            addr: self.server_addr,
+            local_id,
+        }
+    }
+
     pub(crate) fn register_local_node(&self, node: NodeHandle) {
         let command = Command::Register(node);
         let _ = self.command_tx.send(command);
     }
 
-    pub(crate) fn deregister_local_node(&self, node: NodeName) {
+    pub(crate) fn deregister_local_node(&self, node: LocalNodeId) {
         let command = Command::Deregister(node);
         let _ = self.command_tx.send(command);
     }
 
     pub(crate) fn send_message(&self, peer: NodeId, message: RpcMessage) {
-        panic!("{:?}", message);
+        match message {
+            RpcMessage::Hyparview(m) => {
+                use hyparview::message::ProtocolMessage;
+                match m {
+                    ProtocolMessage::Join(m) => {
+                        // TODO: set options (e.g., priority)
+                        let client = rpc::hyparview::JoinCast::client(&self.rpc_client_service);
+                        let _ = client.cast(peer.addr, (peer.local_id, m));
+                    }
+                    ProtocolMessage::ForwardJoin(m) => {
+                        let client =
+                            rpc::hyparview::ForwardJoinCast::client(&self.rpc_client_service);
+                        let _ = client.cast(peer.addr, (peer.local_id, m));
+                    }
+                    ProtocolMessage::Neighbor(m) => {
+                        let client = rpc::hyparview::NeighborCast::client(&self.rpc_client_service);
+                        let _ = client.cast(peer.addr, (peer.local_id, m));
+                    }
+                    ProtocolMessage::Shuffle(m) => {
+                        let client = rpc::hyparview::ShuffleCast::client(&self.rpc_client_service);
+                        let _ = client.cast(peer.addr, (peer.local_id, m));
+                    }
+                    ProtocolMessage::ShuffleReply(m) => {
+                        let client =
+                            rpc::hyparview::ShuffleReplyCast::client(&self.rpc_client_service);
+                        let _ = client.cast(peer.addr, (peer.local_id, m));
+                    }
+                }
+            }
+        }
     }
 }
 
 #[derive(Debug)]
 enum Command {
     Register(NodeHandle),
-    Deregister(NodeName),
+    Deregister(LocalNodeId),
 }
