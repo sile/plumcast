@@ -1,9 +1,12 @@
 use fibers::sync::mpsc;
 use futures::{Async, Poll, Stream};
-use hyparview::{Action as HyparviewAction, Node as HyparviewNode};
+use hyparview::{self, Action as HyparviewAction, Node as HyparviewNode};
 //use plumtree::Node as PlumtreeNode;
+use rand::{self, Rng, SeedableRng, StdRng};
+use slog::Logger;
 use std::net::SocketAddr;
 
+use rpc::RpcMessage;
 use Error;
 use ServiceHandle;
 
@@ -21,6 +24,11 @@ pub struct NodeId {
 
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub struct NodeName(String);
+impl NodeName {
+    pub fn new<T: Into<String>>(name: T) -> Self {
+        NodeName(name.into())
+    }
+}
 
 #[derive(Debug, Clone)]
 pub struct NodeHandle {
@@ -35,14 +43,15 @@ impl NodeHandle {
 
 #[derive(Debug)]
 pub struct Node {
+    logger: Logger,
     name: NodeName,
     service: ServiceHandle,
     message_rx: mpsc::Receiver<Message>,
-    hyparview_node: HyparviewNode<NodeId>,
+    hyparview_node: HyparviewNode<NodeId, StdRng>,
     //    plumtree_node: PlumtreeNode,
 }
 impl Node {
-    pub fn new(name: NodeName, service: ServiceHandle) -> Node {
+    pub fn new(logger: Logger, name: NodeName, service: ServiceHandle) -> Node {
         let id = NodeId {
             name: name.clone(),
             addr: service.server_addr,
@@ -53,25 +62,43 @@ impl Node {
             message_tx,
         };
         service.register_local_node(handle);
+        let rng = StdRng::from_seed(rand::thread_rng().gen());
         Node {
+            logger,
             name,
             service,
             message_rx,
-            hyparview_node: HyparviewNode::new(id),
+            hyparview_node: HyparviewNode::with_options(
+                id,
+                hyparview::NodeOptions::new().set_rng(rng),
+            ),
         }
     }
+
     pub fn join(&mut self, contact_peer: NodeId) {
+        info!(
+            self.logger,
+            "Joins a group by contacting to {:?}", contact_peer
+        );
         self.hyparview_node.join(contact_peer);
     }
+
     pub fn broadcast(&mut self, message: Message) {}
+
     pub fn leave(&mut self) {
         // TODO: self.hyparview_node.leave();
     }
 
     fn handle_hyparview_action(&mut self, action: HyparviewAction<NodeId>) {
         match action {
-            HyparviewAction::Send { .. } => unimplemented!(),
-            HyparviewAction::Notify { .. } => unimplemented!(),
+            HyparviewAction::Send {
+                destination,
+                message,
+            } => {
+                let message = RpcMessage::Hyparview(message);
+                self.service.send_message(destination, message)
+            }
+            HyparviewAction::Notify { event } => unimplemented!("{:?}", event),
             HyparviewAction::Disconnect { .. } => unimplemented!(),
         }
     }

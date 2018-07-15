@@ -12,7 +12,8 @@ use std::collections::HashMap;
 use std::net::SocketAddr;
 use std::sync::Arc;
 
-use node::{NodeHandle, NodeName};
+use node::{NodeHandle, NodeId, NodeName};
+use rpc::RpcMessage;
 use {Error, ErrorKind};
 
 type LocalNodes = Arc<AtomicImmut<HashMap<NodeName, NodeHandle>>>;
@@ -149,6 +150,10 @@ impl ServiceHandle {
     pub(crate) fn deregister_local_node(&self, node: NodeName) {
         let command = Command::Deregister(node);
         let _ = self.command_tx.send(command);
+    }
+
+    pub(crate) fn send_message(&self, peer: NodeId, message: RpcMessage) {
+        panic!("{:?}", message);
     }
 }
 
