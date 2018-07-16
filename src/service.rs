@@ -6,7 +6,6 @@ use fibers_rpc::client::{
     ClientServiceHandle as RpcClientServiceHandle,
 };
 use fibers_rpc::server::{Server as RpcServer, ServerBuilder as RpcServerBuilder};
-use fibers_rpc::Cast;
 use futures::{Async, Future, Poll, Stream};
 use slog::{Discard, Logger};
 use std::collections::HashMap;
@@ -48,19 +47,25 @@ impl ServiceBuilder {
     where
         S: Clone + Spawn + Send + 'static,
     {
-        let rpc_server = self.rpc_server_builder.finish(spawner.clone());
-        let rpc_client_service = self.rpc_client_service_builder.finish(spawner);
         let (command_tx, command_rx) = mpsc::channel();
+        let rpc_client_service = self.rpc_client_service_builder.finish(spawner.clone());
+        let handle = ServiceHandle {
+            server_addr: self.server_addr,
+            command_tx: command_tx.clone(),
+            rpc_client_service: rpc_client_service.handle(),
+            local_nodes: Default::default(),
+            next_local_id: Arc::new(AtomicUsize::new(0)),
+        };
+
+        rpc::hyparview::register_handlers(&mut self.rpc_server_builder, handle.clone());
+        let rpc_server = self.rpc_server_builder.finish(spawner);
 
         Service {
             logger: self.logger.clone(),
-            server_addr: self.server_addr,
-            command_tx,
             command_rx,
             rpc_server,
             rpc_client_service,
-            local_nodes: Default::default(),
-            next_local_id: Arc::new(AtomicUsize::new(0)),
+            handle,
         }
     }
 }
@@ -68,13 +73,10 @@ impl ServiceBuilder {
 #[derive(Debug)]
 pub struct Service<S> {
     logger: Logger,
-    server_addr: SocketAddr,
-    command_tx: mpsc::Sender<Command>,
     command_rx: mpsc::Receiver<Command>, // NOTE: infinite stream
     rpc_server: RpcServer<S>,
     rpc_client_service: RpcClientService,
-    local_nodes: LocalNodes,
-    next_local_id: Arc<AtomicUsize>,
+    handle: ServiceHandle,
 }
 impl<S> Service<S>
 where
@@ -85,20 +87,14 @@ where
     }
 
     pub fn handle(&self) -> ServiceHandle {
-        ServiceHandle {
-            server_addr: self.server_addr,
-            command_tx: self.command_tx.clone(),
-            rpc_client_service: self.rpc_client_service.handle(),
-            local_nodes: Arc::clone(&self.local_nodes),
-            next_local_id: Arc::clone(&self.next_local_id),
-        }
+        self.handle.clone()
     }
 
     fn handle_command(&mut self, command: Command) {
         match command {
             Command::Register(node) => {
                 info!(self.logger, "Registers a local node: {:?}", node);
-                self.local_nodes.update(|nodes| {
+                self.handle.local_nodes.update(|nodes| {
                     let mut nodes = (*nodes).clone();
                     nodes.insert(node.local_id(), node.clone());
                     nodes
@@ -106,7 +102,7 @@ where
             }
             Command::Deregister(node) => {
                 info!(self.logger, "Deregisters a local node: {:?}", node);
-                self.local_nodes.update(|nodes| {
+                self.handle.local_nodes.update(|nodes| {
                     let mut nodes = (*nodes).clone();
                     nodes.remove(&node);
                     nodes
@@ -139,7 +135,7 @@ where
     }
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct ServiceHandle {
     server_addr: SocketAddr,
     command_tx: mpsc::Sender<Command>,
@@ -154,6 +150,10 @@ impl ServiceHandle {
             addr: self.server_addr,
             local_id,
         }
+    }
+
+    pub(crate) fn get_local_node(&self, local_id: &LocalNodeId) -> Option<NodeHandle> {
+        self.local_nodes.load().get(local_id).cloned()
     }
 
     pub(crate) fn register_local_node(&self, node: NodeHandle) {
@@ -172,27 +172,22 @@ impl ServiceHandle {
                 use hyparview::message::ProtocolMessage;
                 match m {
                     ProtocolMessage::Join(m) => {
-                        // TODO: set options (e.g., priority)
-                        let client = rpc::hyparview::JoinCast::client(&self.rpc_client_service);
-                        let _ = client.cast(peer.addr, (peer.local_id, m));
+                        rpc::hyparview::join_cast(peer, m, &self.rpc_client_service);
                     }
                     ProtocolMessage::ForwardJoin(m) => {
-                        let client =
-                            rpc::hyparview::ForwardJoinCast::client(&self.rpc_client_service);
-                        let _ = client.cast(peer.addr, (peer.local_id, m));
+                        rpc::hyparview::forward_join_cast(peer, m, &self.rpc_client_service);
                     }
                     ProtocolMessage::Neighbor(m) => {
-                        let client = rpc::hyparview::NeighborCast::client(&self.rpc_client_service);
-                        let _ = client.cast(peer.addr, (peer.local_id, m));
+                        rpc::hyparview::neighbor_cast(peer, m, &self.rpc_client_service);
                     }
                     ProtocolMessage::Shuffle(m) => {
-                        let client = rpc::hyparview::ShuffleCast::client(&self.rpc_client_service);
-                        let _ = client.cast(peer.addr, (peer.local_id, m));
+                        rpc::hyparview::shuffle_cast(peer, m, &self.rpc_client_service);
                     }
                     ProtocolMessage::ShuffleReply(m) => {
-                        let client =
-                            rpc::hyparview::ShuffleReplyCast::client(&self.rpc_client_service);
-                        let _ = client.cast(peer.addr, (peer.local_id, m));
+                        rpc::hyparview::shuffle_reply_cast(peer, m, &self.rpc_client_service);
+                    }
+                    ProtocolMessage::Disconnect(m) => {
+                        rpc::hyparview::disconnect_cast(peer, m, &self.rpc_client_service);
                     }
                 }
             }

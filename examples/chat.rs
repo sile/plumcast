@@ -10,7 +10,7 @@ extern crate sloggers;
 extern crate trackable;
 
 use clap::Arg;
-use fibers::{Executor, InPlaceExecutor, Spawn};
+use fibers::{Executor, Spawn, ThreadPoolExecutor};
 use futures::{Future, Stream};
 use plumcast::ServiceBuilder;
 use plumcast::{LocalNodeId, Node, NodeId};
@@ -45,7 +45,7 @@ fn main() -> Result<(), MainError> {
     let port = matches.value_of("PORT").unwrap();
     let addr: SocketAddr = track_any_err!(format!("0.0.0.0:{}", port).parse())?;
 
-    let executor = track_any_err!(InPlaceExecutor::new())?;
+    let executor = track_any_err!(ThreadPoolExecutor::new())?;
     let service = ServiceBuilder::new(addr)
         .logger(logger.clone())
         .finish(executor.handle());

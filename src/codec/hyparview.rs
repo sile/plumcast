@@ -2,7 +2,8 @@ use bytecodec::combinator::{Collect, Repeat};
 use bytecodec::fixnum::{U8Decoder, U8Encoder};
 use bytecodec::{ByteCount, Decode, Encode, Eos, Result, SizedEncode};
 use hyparview::message::{
-    ForwardJoinMessage, JoinMessage, NeighborMessage, ShuffleMessage, ShuffleReplyMessage,
+    DisconnectMessage, ForwardJoinMessage, JoinMessage, NeighborMessage, ShuffleMessage,
+    ShuffleReplyMessage,
 };
 use hyparview::TimeToLive;
 use std;
@@ -415,5 +416,72 @@ impl Encode for ShuffleReplyMessageEncoder {
 
     fn is_idle(&self) -> bool {
         self.nodes.is_idle()
+    }
+}
+
+#[derive(Debug, Default)]
+pub struct DisconnectMessageDecoder {
+    destination: LocalNodeIdDecoder,
+    sender: NodeIdDecoder,
+}
+impl Decode for DisconnectMessageDecoder {
+    type Item = (LocalNodeId, DisconnectMessage<NodeId>);
+
+    fn decode(&mut self, buf: &[u8], eos: Eos) -> Result<usize> {
+        let mut offset = 0;
+        bytecodec_try_decode!(self.destination, offset, buf, eos);
+        bytecodec_try_decode!(self.sender, offset, buf, eos);
+        Ok(offset)
+    }
+
+    fn finish_decoding(&mut self) -> Result<Self::Item> {
+        let destination = track!(self.destination.finish_decoding())?;
+        let sender = track!(self.sender.finish_decoding())?;
+        Ok((destination, DisconnectMessage { sender }))
+    }
+
+    fn requiring_bytes(&self) -> ByteCount {
+        self.destination
+            .requiring_bytes()
+            .add_for_decoding(self.sender.requiring_bytes())
+    }
+
+    fn is_idle(&self) -> bool {
+        self.sender.is_idle()
+    }
+}
+
+#[derive(Debug, Default)]
+pub struct DisconnectMessageEncoder {
+    destination: LocalNodeIdEncoder,
+    sender: NodeIdEncoder,
+}
+impl Encode for DisconnectMessageEncoder {
+    type Item = (LocalNodeId, DisconnectMessage<NodeId>);
+
+    fn encode(&mut self, buf: &mut [u8], eos: Eos) -> Result<usize> {
+        let mut offset = 0;
+        bytecodec_try_encode!(self.destination, offset, buf, eos);
+        bytecodec_try_encode!(self.sender, offset, buf, eos);
+        Ok(offset)
+    }
+
+    fn start_encoding(&mut self, item: Self::Item) -> Result<()> {
+        track!(self.destination.start_encoding(item.0))?;
+        track!(self.sender.start_encoding(item.1.sender))?;
+        Ok(())
+    }
+
+    fn requiring_bytes(&self) -> ByteCount {
+        ByteCount::Finite(self.exact_requiring_bytes())
+    }
+
+    fn is_idle(&self) -> bool {
+        self.sender.is_idle()
+    }
+}
+impl SizedEncode for DisconnectMessageEncoder {
+    fn exact_requiring_bytes(&self) -> u64 {
+        self.destination.exact_requiring_bytes() + self.sender.exact_requiring_bytes()
     }
 }
