@@ -10,8 +10,9 @@ extern crate sloggers;
 extern crate trackable;
 
 use clap::Arg;
+use fibers::sync::mpsc;
 use fibers::{Executor, Spawn, ThreadPoolExecutor};
-use futures::{Future, Stream};
+use futures::{Async, Future, Poll, Stream};
 use plumcast::ServiceBuilder;
 use plumcast::{LocalNodeId, Node, NodeId};
 use sloggers::terminal::{Destination, TerminalLoggerBuilder};
@@ -49,6 +50,7 @@ fn main() -> Result<(), MainError> {
     let service = ServiceBuilder::new(addr)
         .logger(logger.clone())
         .finish(executor.handle());
+
     let mut node = Node::new(logger, service.handle());
     if let Some(contact) = matches.value_of("CONTACT_SERVER") {
         let contact: SocketAddr = track_any_err!(contact.parse())?;
@@ -57,12 +59,56 @@ fn main() -> Result<(), MainError> {
             local_id: LocalNodeId::new(0),
         });
     }
+
+    let (message_tx, message_rx) = mpsc::channel();
+    let node = ChatNode {
+        inner: node,
+        message_rx,
+    };
     executor.spawn(service.map_err(|e| panic!("{}", e)));
-    executor.spawn(node.for_each(|m| {
-        println!("# MESSAGE: {:?}", m);
-        Ok(())
-    }).map_err(|e| panic!("{}", e)));
+    executor.spawn(node);
+
+    std::thread::spawn(move || {
+        use std::io::BufRead;
+        let stdin = std::io::stdin();
+        for line in stdin.lock().lines() {
+            let line = if let Ok(line) = line {
+                line
+            } else {
+                break;
+            };
+            if message_tx.send(line).is_err() {
+                break;
+            }
+        }
+    });
 
     track_any_err!(executor.run())?;
     Ok(())
+}
+
+struct ChatNode {
+    inner: Node,
+    message_rx: mpsc::Receiver<String>,
+}
+impl Future for ChatNode {
+    type Item = ();
+    type Error = ();
+
+    fn poll(&mut self) -> Poll<Self::Item, Self::Error> {
+        let mut did_something = true;
+        while did_something {
+            did_something = false;
+
+            while let Async::Ready(Some(m)) = track_try_unwrap!(self.inner.poll()) {
+                println!("# MESSAGE: {:?}", m);
+                did_something = true;
+            }
+            while let Async::Ready(Some(m)) = self.message_rx.poll().expect("Never fails") {
+                self.inner.broadcast(m.into());
+                did_something = true;
+            }
+        }
+        Ok(Async::NotReady)
+    }
 }

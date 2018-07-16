@@ -1,18 +1,16 @@
 use fibers::sync::mpsc;
 use futures::{Async, Poll, Stream};
 use hyparview::{self, Action as HyparviewAction, Node as HyparviewNode};
-//use plumtree::Node as PlumtreeNode;
+use plumtree::message::Message;
+use plumtree::{self, Action as PlumtreeAction, Node as PlumtreeNode};
 use rand::{self, Rng, SeedableRng, StdRng};
 use slog::Logger;
+use std::collections::VecDeque;
 use std::net::SocketAddr;
 
 use rpc::RpcMessage;
 use ServiceHandle;
 use {Error, ErrorKind};
-
-// application message
-#[derive(Debug)]
-pub struct Message;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, PartialOrd, Ord)]
 pub struct LocalNodeId(u64);
@@ -47,6 +45,20 @@ impl NodeHandle {
     }
 }
 
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+pub struct MessageId {
+    pub node_id: NodeId,
+    pub seqno: u64,
+}
+
+#[derive(Debug)]
+pub struct System;
+impl plumtree::System for System {
+    type NodeId = NodeId;
+    type MessageId = MessageId;
+    type MessagePayload = Vec<u8>; // TODO:
+}
+
 #[derive(Debug)]
 pub struct Node {
     logger: Logger,
@@ -55,6 +67,9 @@ pub struct Node {
     service: ServiceHandle,
     message_rx: mpsc::Receiver<RpcMessage>,
     hyparview_node: HyparviewNode<NodeId, StdRng>,
+    plumtree_node: PlumtreeNode<System>,
+    message_seqno: u64,
+    deliverable_messages: VecDeque<Message<System>>,
 }
 impl Node {
     pub fn new(logger: Logger, service: ServiceHandle) -> Node {
@@ -73,9 +88,12 @@ impl Node {
             service,
             message_rx,
             hyparview_node: HyparviewNode::with_options(
-                id,
+                id.clone(),
                 hyparview::NodeOptions::new().set_rng(rng),
             ),
+            plumtree_node: PlumtreeNode::new(id.clone()),
+            message_seqno: 0, // TODO: random (or make initial node id random)
+            deliverable_messages: VecDeque::new(),
         }
     }
 
@@ -87,7 +105,20 @@ impl Node {
         self.hyparview_node.join(contact_peer);
     }
 
-    pub fn broadcast(&mut self, message: Message) {}
+    pub fn broadcast(&mut self, message: Vec<u8>) {
+        warn!(self.logger, "[TODO] Broadcast: {:?}", message);
+        let mid = MessageId {
+            node_id: self.id.clone(),
+            seqno: self.message_seqno,
+        };
+        self.message_seqno += 1;
+
+        let m = Message {
+            id: mid,
+            payload: message,
+        };
+        self.plumtree_node.broadcast_message(m);
+    }
 
     fn handle_hyparview_action(&mut self, action: HyparviewAction<NodeId>) {
         match action {
@@ -100,9 +131,37 @@ impl Node {
                 // TODO: handle error (i.e., disconnection)
                 self.service.send_message(destination, message);
             }
-            HyparviewAction::Notify { event } => warn!(self.logger, "[TODO] Event: {:?}", event),
+            HyparviewAction::Notify { event } => {
+                use hyparview::Event;
+                match event {
+                    Event::NeighborDown { node } => {
+                        info!(self.logger, "Neighbor down: {:?}", node);
+                        self.plumtree_node.handle_neighbor_down(&node);
+                    }
+                    Event::NeighborUp { node } => {
+                        info!(self.logger, "Neighbor up: {:?}", node);
+                        self.plumtree_node.handle_neighbor_up(&node);
+                    }
+                }
+            }
             HyparviewAction::Disconnect { node } => {
                 info!(self.logger, "Disconnected: {:?}", node);
+            }
+        }
+    }
+
+    fn handle_plumtree_action(&mut self, action: PlumtreeAction<System>) {
+        warn!(self.logger, "[TODO] Action: {:?}", action);
+        match action {
+            PlumtreeAction::Send {
+                destination,
+                message,
+            } => {
+                let message = RpcMessage::Plumtree(message);
+                self.service.send_message(destination, message);
+            }
+            PlumtreeAction::Deliver { message } => {
+                self.deliverable_messages.push_back(message);
             }
         }
     }
@@ -112,6 +171,10 @@ impl Node {
             RpcMessage::Hyparview(m) => {
                 warn!(self.logger, "[TODO] Recv: {:?}", m); // TODO: remove
                 self.hyparview_node.handle_protocol_message(m);
+            }
+            RpcMessage::Plumtree(m) => {
+                warn!(self.logger, "[TODO] Recv: {:?}", m); // TODO: remove
+                self.plumtree_node.handle_protocol_message(m);
             }
         }
     }
@@ -128,7 +191,7 @@ impl Node {
     }
 }
 impl Stream for Node {
-    type Item = Message;
+    type Item = Message<System>;
     type Error = Error;
 
     fn poll(&mut self) -> Poll<Option<Self::Item>, Self::Error> {
@@ -136,8 +199,16 @@ impl Stream for Node {
         while did_something {
             did_something = false;
 
+            if let Some(message) = self.deliverable_messages.pop_front() {
+                return Ok(Async::Ready(Some(message)));
+            }
+
             while let Some(action) = self.hyparview_node.poll_action() {
                 self.handle_hyparview_action(action);
+                did_something = true;
+            }
+            while let Some(action) = self.plumtree_node.poll_action() {
+                self.handle_plumtree_action(action);
                 did_something = true;
             }
             while let Async::Ready(message) = self.message_rx.poll().expect("Never fails") {

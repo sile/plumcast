@@ -58,6 +58,7 @@ impl ServiceBuilder {
         };
 
         rpc::hyparview::register_handlers(&mut self.rpc_server_builder, handle.clone());
+        rpc::plumtree::register_handlers(&mut self.rpc_server_builder, handle.clone());
         let rpc_server = self.rpc_server_builder.finish(spawner);
 
         Service {
@@ -188,6 +189,23 @@ impl ServiceHandle {
                     }
                     ProtocolMessage::Disconnect(m) => {
                         rpc::hyparview::disconnect_cast(peer, m, &self.rpc_client_service);
+                    }
+                }
+            }
+            RpcMessage::Plumtree(m) => {
+                use plumtree::message::ProtocolMessage;
+                match m {
+                    ProtocolMessage::Gossip(m) => {
+                        rpc::plumtree::gossip_cast(peer, m, &self.rpc_client_service);
+                    }
+                    ProtocolMessage::Ihave(m) => {
+                        rpc::plumtree::ihave_cast(peer, m, &self.rpc_client_service);
+                    }
+                    ProtocolMessage::Graft(m) => {
+                        rpc::plumtree::graft_cast(peer, m, &self.rpc_client_service);
+                    }
+                    ProtocolMessage::Prune(m) => {
+                        rpc::plumtree::prune_cast(peer, m, &self.rpc_client_service);
                     }
                 }
             }
