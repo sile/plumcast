@@ -1,10 +1,16 @@
 use fibers_rpc;
+use std;
 use trackable::error::{ErrorKind as TrackableErrorKind, ErrorKindExt, TrackableError};
 
 /// This crate specific `Error` type.
 #[derive(Debug, Clone)]
 pub struct Error(TrackableError<ErrorKind>);
 derive_traits_for_trackable_error_newtype!(Error, ErrorKind);
+impl From<std::sync::mpsc::RecvError> for Error {
+    fn from(f: std::sync::mpsc::RecvError) -> Self {
+        ErrorKind::Other.cause(f).into()
+    }
+}
 impl From<fibers_rpc::Error> for Error {
     fn from(f: fibers_rpc::Error) -> Self {
         // TODO

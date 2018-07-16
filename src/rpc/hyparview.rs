@@ -14,7 +14,7 @@ use codec::hyparview::{
     ShuffleReplyMessageDecoder, ShuffleReplyMessageEncoder,
 };
 use service::ServiceHandle;
-use {LocalNodeId, NodeId};
+use {LocalNodeId, NodeId, Result};
 
 pub fn register_handlers(rpc: &mut ServerBuilder, service: ServiceHandle) {
     rpc.add_cast_handler(JoinHandler(service.clone()));
@@ -36,10 +36,15 @@ impl Cast for JoinCast {
     type Encoder = JoinMessageEncoder;
 }
 
-pub fn join_cast(peer: NodeId, m: JoinMessage<NodeId>, service: &ClientServiceHandle) {
+pub fn join_cast(
+    peer: NodeId,
+    m: JoinMessage<NodeId>,
+    service: &ClientServiceHandle,
+) -> Result<()> {
     // TODO: set options (e.g., priority, force_wakeup)
     let client = JoinCast::client(&service);
-    track_try_unwrap!(client.cast(peer.addr, (peer.local_id, m))); // TODO
+    track!(client.cast(peer.addr, (peer.local_id, m)))?;
+    Ok(())
 }
 
 #[derive(Debug)]
@@ -73,10 +78,11 @@ pub fn forward_join_cast(
     peer: NodeId,
     m: ForwardJoinMessage<NodeId>,
     service: &ClientServiceHandle,
-) {
+) -> Result<()> {
     // TODO: set options (e.g., priority, force_wakeup)
     let client = ForwardJoinCast::client(&service);
-    let _ = client.cast(peer.addr, (peer.local_id, m));
+    track!(client.cast(peer.addr, (peer.local_id, m)))?;
+    Ok(())
 }
 
 #[derive(Debug)]
@@ -107,10 +113,15 @@ impl Cast for NeighborCast {
     type Encoder = NeighborMessageEncoder;
 }
 
-pub fn neighbor_cast(peer: NodeId, m: NeighborMessage<NodeId>, service: &ClientServiceHandle) {
+pub fn neighbor_cast(
+    peer: NodeId,
+    m: NeighborMessage<NodeId>,
+    service: &ClientServiceHandle,
+) -> Result<()> {
     // TODO: set options (e.g., priority, force_wakeup)
     let client = NeighborCast::client(&service);
-    let _ = client.cast(peer.addr, (peer.local_id, m));
+    track!(client.cast(peer.addr, (peer.local_id, m)))?;
+    Ok(())
 }
 
 #[derive(Debug)]
@@ -141,10 +152,15 @@ impl Cast for ShuffleCast {
     type Encoder = ShuffleMessageEncoder;
 }
 
-pub fn shuffle_cast(peer: NodeId, m: ShuffleMessage<NodeId>, service: &ClientServiceHandle) {
+pub fn shuffle_cast(
+    peer: NodeId,
+    m: ShuffleMessage<NodeId>,
+    service: &ClientServiceHandle,
+) -> Result<()> {
     // TODO: set options (e.g., priority, force_wakeup)
     let client = ShuffleCast::client(&service);
-    let _ = client.cast(peer.addr, (peer.local_id, m));
+    track!(client.cast(peer.addr, (peer.local_id, m)))?;
+    Ok(())
 }
 
 #[derive(Debug)]
@@ -179,10 +195,11 @@ pub fn shuffle_reply_cast(
     peer: NodeId,
     m: ShuffleReplyMessage<NodeId>,
     service: &ClientServiceHandle,
-) {
+) -> Result<()> {
     // TODO: set options (e.g., priority, force_wakeup)
     let client = ShuffleReplyCast::client(&service);
-    let _ = client.cast(peer.addr, (peer.local_id, m));
+    track!(client.cast(peer.addr, (peer.local_id, m)))?;
+    Ok(())
 }
 
 #[derive(Debug)]
@@ -213,10 +230,15 @@ impl Cast for DisconnectCast {
     type Encoder = DisconnectMessageEncoder;
 }
 
-pub fn disconnect_cast(peer: NodeId, m: DisconnectMessage<NodeId>, service: &ClientServiceHandle) {
+pub fn disconnect_cast(
+    peer: NodeId,
+    m: DisconnectMessage<NodeId>,
+    service: &ClientServiceHandle,
+) -> Result<()> {
     // TODO: set options (e.g., priority, force_wakeup)
     let client = DisconnectCast::client(&service);
-    track_try_unwrap!(client.cast(peer.addr, (peer.local_id, m))); // TODO
+    track!(client.cast(peer.addr, (peer.local_id, m)))?;
+    Ok(())
 }
 
 #[derive(Debug)]

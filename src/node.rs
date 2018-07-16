@@ -1,5 +1,6 @@
 use fibers::sync::mpsc;
-use futures::{Async, Poll, Stream};
+use fibers::time::timer::{self, Timeout};
+use futures::{Async, Future, Poll, Stream};
 use hyparview::{self, Action as HyparviewAction, Node as HyparviewNode};
 use plumtree::message::Message;
 use plumtree::{self, Action as PlumtreeAction, Node as PlumtreeNode};
@@ -7,6 +8,7 @@ use rand::{self, Rng, SeedableRng, StdRng};
 use slog::Logger;
 use std::collections::VecDeque;
 use std::net::SocketAddr;
+use std::time::Duration;
 
 use rpc::RpcMessage;
 use ServiceHandle;
@@ -56,8 +58,13 @@ pub struct System;
 impl plumtree::System for System {
     type NodeId = NodeId;
     type MessageId = MessageId;
-    type MessagePayload = Vec<u8>; // TODO:
+    type MessagePayload = Vec<u8>; // TODO: Arc<T: MessagePayload>
 }
+
+const TICK_MS: u64 = 1000; // TODO
+const HYPARVIEW_SHUFFLE_INTERVAL_TICKS: usize = 59;
+const HYPARVIEW_SYNC_INTERVAL_TICKS: usize = 31;
+const HYPARVIEW_FILL_INTERVAL_TICKS: usize = 20;
 
 #[derive(Debug)]
 pub struct Node {
@@ -70,6 +77,8 @@ pub struct Node {
     plumtree_node: PlumtreeNode<System>,
     message_seqno: u64,
     deliverable_messages: VecDeque<Message<System>>,
+    tick: Timeout, // TODO: tick_timeout
+    ticks: usize,  // or clock
 }
 impl Node {
     pub fn new(logger: Logger, service: ServiceHandle) -> Node {
@@ -94,6 +103,8 @@ impl Node {
             plumtree_node: PlumtreeNode::new(id.clone()),
             message_seqno: 0, // TODO: random (or make initial node id random)
             deliverable_messages: VecDeque::new(),
+            tick: timer::timeout(Duration::from_millis(TICK_MS)),
+            ticks: 0,
         }
     }
 
@@ -120,6 +131,10 @@ impl Node {
         self.plumtree_node.broadcast_message(m);
     }
 
+    pub fn forget_message(&mut self, message_id: &MessageId) {
+        self.plumtree_node.forget_message(message_id);
+    }
+
     fn handle_hyparview_action(&mut self, action: HyparviewAction<NodeId>) {
         match action {
             HyparviewAction::Send {
@@ -128,8 +143,16 @@ impl Node {
             } => {
                 warn!(self.logger, "[TODO] Send: {:?}", message);
                 let message = RpcMessage::Hyparview(message);
-                // TODO: handle error (i.e., disconnection)
-                self.service.send_message(destination, message);
+                if let Err(e) = self.service.send_message(destination.clone(), message) {
+                    // TODO: metrics
+                    warn!(
+                        self.logger,
+                        "Cannot send HyParView message to {:?}: {}", destination, e
+                    );
+                    //if self.hyparview_node.active_view().contains(&destination) {
+                    self.hyparview_node.disconnect(&destination);
+                    //}
+                }
             }
             HyparviewAction::Notify { event } => {
                 use hyparview::Event;
@@ -158,7 +181,14 @@ impl Node {
                 message,
             } => {
                 let message = RpcMessage::Plumtree(message);
-                self.service.send_message(destination, message);
+                if let Err(e) = self.service.send_message(destination.clone(), message) {
+                    // TODO: metrics
+                    warn!(
+                        self.logger,
+                        "Cannot send Plumtree message to {:?}: {}", destination, e
+                    );
+                    self.hyparview_node.disconnect(&destination);
+                }
             }
             PlumtreeAction::Deliver { message } => {
                 self.deliverable_messages.push_back(message);
@@ -186,7 +216,7 @@ impl Node {
             };
             let message = hyparview::message::ProtocolMessage::Disconnect(message);
             let message = RpcMessage::Hyparview(message);
-            self.service.send_message(peer, message);
+            let _ = self.service.send_message(peer, message);
         }
     }
 }
@@ -195,6 +225,23 @@ impl Stream for Node {
     type Error = Error;
 
     fn poll(&mut self) -> Poll<Option<Self::Item>, Self::Error> {
+        while track!(self.tick.poll().map_err(Error::from))?.is_ready() {
+            self.plumtree_node.tick();
+            self.ticks += 1;
+            if self.ticks % HYPARVIEW_SHUFFLE_INTERVAL_TICKS == 0 {
+                self.hyparview_node.shuffle_passive_view();
+            }
+            if self.ticks % HYPARVIEW_FILL_INTERVAL_TICKS == 0
+                || self.hyparview_node.active_view().is_empty()
+            {
+                self.hyparview_node.fill_active_view();
+            }
+            if self.ticks % HYPARVIEW_SYNC_INTERVAL_TICKS == 0 {
+                self.hyparview_node.sync_active_view();
+            }
+            self.tick = timer::timeout(Duration::from_millis(TICK_MS));
+        }
+
         let mut did_something = true;
         while did_something {
             did_something = false;
@@ -216,8 +263,6 @@ impl Stream for Node {
                 self.handle_rpc_message(message);
                 did_something = true;
             }
-
-            // TODO: call hyperview shuffle/fill/sync periodically
         }
         Ok(Async::NotReady)
     }

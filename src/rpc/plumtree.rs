@@ -10,7 +10,7 @@ use codec::plumtree::{
 };
 use node::System;
 use service::ServiceHandle;
-use {LocalNodeId, NodeId};
+use {LocalNodeId, NodeId, Result};
 
 pub fn register_handlers(rpc: &mut ServerBuilder, service: ServiceHandle) {
     rpc.add_cast_handler(GossipHandler(service.clone()));
@@ -30,10 +30,15 @@ impl Cast for GossipCast {
     type Encoder = GossipMessageEncoder;
 }
 
-pub fn gossip_cast(peer: NodeId, m: GossipMessage<System>, service: &ClientServiceHandle) {
+pub fn gossip_cast(
+    peer: NodeId,
+    m: GossipMessage<System>,
+    service: &ClientServiceHandle,
+) -> Result<()> {
     // TODO: set options (e.g., priority, force_wakeup)
     let client = GossipCast::client(&service);
-    track_try_unwrap!(client.cast(peer.addr, (peer.local_id, m))); // TODO
+    track!(client.cast(peer.addr, (peer.local_id, m)))?;
+    Ok(())
 }
 
 #[derive(Debug)]
@@ -63,10 +68,15 @@ impl Cast for IhaveCast {
     type Encoder = IhaveMessageEncoder;
 }
 
-pub fn ihave_cast(peer: NodeId, m: IhaveMessage<System>, service: &ClientServiceHandle) {
+pub fn ihave_cast(
+    peer: NodeId,
+    m: IhaveMessage<System>,
+    service: &ClientServiceHandle,
+) -> Result<()> {
     // TODO: set options (e.g., priority, force_wakeup)
     let client = IhaveCast::client(&service);
-    track_try_unwrap!(client.cast(peer.addr, (peer.local_id, m))); // TODO
+    track!(client.cast(peer.addr, (peer.local_id, m)))?;
+    Ok(())
 }
 
 #[derive(Debug)]
@@ -96,10 +106,15 @@ impl Cast for GraftCast {
     type Encoder = GraftMessageEncoder;
 }
 
-pub fn graft_cast(peer: NodeId, m: GraftMessage<System>, service: &ClientServiceHandle) {
+pub fn graft_cast(
+    peer: NodeId,
+    m: GraftMessage<System>,
+    service: &ClientServiceHandle,
+) -> Result<()> {
     // TODO: set options (e.g., priority, force_wakeup)
     let client = GraftCast::client(&service);
-    track_try_unwrap!(client.cast(peer.addr, (peer.local_id, m))); // TODO
+    track!(client.cast(peer.addr, (peer.local_id, m)))?;
+    Ok(())
 }
 
 #[derive(Debug)]
@@ -129,10 +144,15 @@ impl Cast for PruneCast {
     type Encoder = PruneMessageEncoder;
 }
 
-pub fn prune_cast(peer: NodeId, m: PruneMessage<System>, service: &ClientServiceHandle) {
+pub fn prune_cast(
+    peer: NodeId,
+    m: PruneMessage<System>,
+    service: &ClientServiceHandle,
+) -> Result<()> {
     // TODO: set options (e.g., priority, force_wakeup)
     let client = PruneCast::client(&service);
-    track_try_unwrap!(client.cast(peer.addr, (peer.local_id, m))); // TODO
+    track!(client.cast(peer.addr, (peer.local_id, m)))?;
+    Ok(())
 }
 
 #[derive(Debug)]

@@ -15,7 +15,7 @@ use std::sync::Arc;
 
 use node::{LocalNodeId, NodeHandle, NodeId};
 use rpc::{self, RpcMessage};
-use {Error, ErrorKind};
+use {Error, ErrorKind, Result};
 
 type LocalNodes = Arc<AtomicImmut<HashMap<LocalNodeId, NodeHandle>>>;
 
@@ -52,7 +52,7 @@ impl ServiceBuilder {
         let handle = ServiceHandle {
             server_addr: self.server_addr,
             command_tx: command_tx.clone(),
-            rpc_client_service: rpc_client_service.handle(),
+            rpc_service: rpc_client_service.handle(),
             local_nodes: Default::default(),
             next_local_id: Arc::new(AtomicUsize::new(0)),
         };
@@ -140,7 +140,7 @@ where
 pub struct ServiceHandle {
     server_addr: SocketAddr,
     command_tx: mpsc::Sender<Command>,
-    rpc_client_service: RpcClientServiceHandle,
+    rpc_service: RpcClientServiceHandle,
     local_nodes: LocalNodes,
     next_local_id: Arc<AtomicUsize>,
 }
@@ -167,49 +167,54 @@ impl ServiceHandle {
         let _ = self.command_tx.send(command);
     }
 
-    pub(crate) fn send_message(&self, peer: NodeId, message: RpcMessage) {
+    pub(crate) fn send_message(&self, peer: NodeId, message: RpcMessage) -> Result<()> {
         match message {
             RpcMessage::Hyparview(m) => {
                 use hyparview::message::ProtocolMessage;
+                use rpc::hyparview;
+
                 match m {
                     ProtocolMessage::Join(m) => {
-                        rpc::hyparview::join_cast(peer, m, &self.rpc_client_service);
+                        track!(hyparview::join_cast(peer, m, &self.rpc_service))?;
                     }
                     ProtocolMessage::ForwardJoin(m) => {
-                        rpc::hyparview::forward_join_cast(peer, m, &self.rpc_client_service);
+                        track!(hyparview::forward_join_cast(peer, m, &self.rpc_service))?;
                     }
                     ProtocolMessage::Neighbor(m) => {
-                        rpc::hyparview::neighbor_cast(peer, m, &self.rpc_client_service);
+                        track!(hyparview::neighbor_cast(peer, m, &self.rpc_service))?;
                     }
                     ProtocolMessage::Shuffle(m) => {
-                        rpc::hyparview::shuffle_cast(peer, m, &self.rpc_client_service);
+                        track!(hyparview::shuffle_cast(peer, m, &self.rpc_service))?;
                     }
                     ProtocolMessage::ShuffleReply(m) => {
-                        rpc::hyparview::shuffle_reply_cast(peer, m, &self.rpc_client_service);
+                        track!(hyparview::shuffle_reply_cast(peer, m, &self.rpc_service))?;
                     }
                     ProtocolMessage::Disconnect(m) => {
-                        rpc::hyparview::disconnect_cast(peer, m, &self.rpc_client_service);
+                        track!(hyparview::disconnect_cast(peer, m, &self.rpc_service))?;
                     }
                 }
             }
             RpcMessage::Plumtree(m) => {
                 use plumtree::message::ProtocolMessage;
+                use rpc::plumtree;
+
                 match m {
                     ProtocolMessage::Gossip(m) => {
-                        rpc::plumtree::gossip_cast(peer, m, &self.rpc_client_service);
+                        track!(plumtree::gossip_cast(peer, m, &self.rpc_service))?;
                     }
                     ProtocolMessage::Ihave(m) => {
-                        rpc::plumtree::ihave_cast(peer, m, &self.rpc_client_service);
+                        track!(plumtree::ihave_cast(peer, m, &self.rpc_service))?;
                     }
                     ProtocolMessage::Graft(m) => {
-                        rpc::plumtree::graft_cast(peer, m, &self.rpc_client_service);
+                        track!(plumtree::graft_cast(peer, m, &self.rpc_service))?;
                     }
                     ProtocolMessage::Prune(m) => {
-                        rpc::plumtree::prune_cast(peer, m, &self.rpc_client_service);
+                        track!(plumtree::prune_cast(peer, m, &self.rpc_service))?;
                     }
                 }
             }
         }
+        Ok(())
     }
 }
 
