@@ -157,6 +157,27 @@ impl ServiceHandle {
         self.local_nodes.load().get(local_id).cloned()
     }
 
+    pub(crate) fn get_local_node_or_disconnect(
+        &self,
+        id: &LocalNodeId,
+        sender: &NodeId,
+    ) -> Option<NodeHandle> {
+        if let Some(node) = self.local_nodes.load().get(id).cloned() {
+            Some(node)
+        } else {
+            use hyparview::message::{DisconnectMessage, ProtocolMessage};
+            // TODO: metrics
+            let missing = NodeId {
+                addr: self.server_addr,
+                local_id: id.clone(),
+            };
+            let message = DisconnectMessage { sender: missing };
+            let message = ProtocolMessage::Disconnect(message);
+            let _ = self.send_message(sender.clone(), RpcMessage::Hyparview(message));
+            None
+        }
+    }
+
     pub(crate) fn register_local_node(&self, node: NodeHandle) {
         let command = Command::Register(node);
         let _ = self.command_tx.send(command);

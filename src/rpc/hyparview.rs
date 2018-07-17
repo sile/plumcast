@@ -41,8 +41,9 @@ pub fn join_cast(
     m: JoinMessage<NodeId>,
     service: &ClientServiceHandle,
 ) -> Result<()> {
-    // TODO: set options (e.g., priority, force_wakeup)
-    let client = JoinCast::client(&service);
+    let mut client = JoinCast::client(&service);
+    client.options_mut().force_wakeup = true;
+    client.options_mut().priority = 100;
     track!(client.cast(peer.addr, (peer.local_id, m)))?;
     Ok(())
 }
@@ -51,13 +52,9 @@ pub fn join_cast(
 struct JoinHandler(ServiceHandle);
 impl HandleCast<JoinCast> for JoinHandler {
     fn handle_cast(&self, (id, m): (LocalNodeId, JoinMessage<NodeId>)) -> NoReply {
-        if let Some(node) = self.0.get_local_node(&id) {
+        if let Some(node) = self.0.get_local_node_or_disconnect(&id, &m.sender) {
             let m = RpcMessage::Hyparview(ProtocolMessage::Join(m));
             node.send_rpc_message(m);
-        } else {
-            println!("# UNKNOWN NODE: {:?}, {:?}", id, m);
-            // TODO: metric or log
-            // TODO: reply disconnect
         }
         NoReply::done()
     }
@@ -79,8 +76,9 @@ pub fn forward_join_cast(
     m: ForwardJoinMessage<NodeId>,
     service: &ClientServiceHandle,
 ) -> Result<()> {
-    // TODO: set options (e.g., priority, force_wakeup)
-    let client = ForwardJoinCast::client(&service);
+    let mut client = ForwardJoinCast::client(&service);
+    client.options_mut().force_wakeup = true;
+    client.options_mut().priority = 100;
     track!(client.cast(peer.addr, (peer.local_id, m)))?;
     Ok(())
 }
@@ -89,14 +87,9 @@ pub fn forward_join_cast(
 struct ForwardJoinHandler(ServiceHandle);
 impl HandleCast<ForwardJoinCast> for ForwardJoinHandler {
     fn handle_cast(&self, (id, m): (LocalNodeId, ForwardJoinMessage<NodeId>)) -> NoReply {
-        if let Some(node) = self.0.get_local_node(&id) {
+        if let Some(node) = self.0.get_local_node_or_disconnect(&id, &m.sender) {
             let m = RpcMessage::Hyparview(ProtocolMessage::ForwardJoin(m));
             node.send_rpc_message(m);
-        } else {
-            println!("# UNKNOWN NODE: {:?}, {:?}", id, m);
-
-            // TODO: metric or log
-            // TODO: reply disconnect
         }
         NoReply::done()
     }
@@ -118,8 +111,10 @@ pub fn neighbor_cast(
     m: NeighborMessage<NodeId>,
     service: &ClientServiceHandle,
 ) -> Result<()> {
-    // TODO: set options (e.g., priority, force_wakeup)
-    let client = NeighborCast::client(&service);
+    let mut client = NeighborCast::client(&service);
+    if m.high_priority {
+        client.options_mut().priority = 100;
+    }
     track!(client.cast(peer.addr, (peer.local_id, m)))?;
     Ok(())
 }
@@ -128,14 +123,9 @@ pub fn neighbor_cast(
 struct NeighborHandler(ServiceHandle);
 impl HandleCast<NeighborCast> for NeighborHandler {
     fn handle_cast(&self, (id, m): (LocalNodeId, NeighborMessage<NodeId>)) -> NoReply {
-        if let Some(node) = self.0.get_local_node(&id) {
+        if let Some(node) = self.0.get_local_node_or_disconnect(&id, &m.sender) {
             let m = RpcMessage::Hyparview(ProtocolMessage::Neighbor(m));
             node.send_rpc_message(m);
-        } else {
-            println!("# UNKNOWN NODE: {:?}, {:?}", id, m);
-
-            // TODO: metric or log
-            // TODO: reply disconnect
         }
         NoReply::done()
     }
@@ -157,8 +147,8 @@ pub fn shuffle_cast(
     m: ShuffleMessage<NodeId>,
     service: &ClientServiceHandle,
 ) -> Result<()> {
-    // TODO: set options (e.g., priority, force_wakeup)
-    let client = ShuffleCast::client(&service);
+    let mut client = ShuffleCast::client(&service);
+    client.options_mut().priority = 200;
     track!(client.cast(peer.addr, (peer.local_id, m)))?;
     Ok(())
 }
@@ -167,14 +157,9 @@ pub fn shuffle_cast(
 struct ShuffleHandler(ServiceHandle);
 impl HandleCast<ShuffleCast> for ShuffleHandler {
     fn handle_cast(&self, (id, m): (LocalNodeId, ShuffleMessage<NodeId>)) -> NoReply {
-        if let Some(node) = self.0.get_local_node(&id) {
+        if let Some(node) = self.0.get_local_node_or_disconnect(&id, &m.sender) {
             let m = RpcMessage::Hyparview(ProtocolMessage::Shuffle(m));
             node.send_rpc_message(m);
-        } else {
-            println!("# UNKNOWN NODE: {:?}, {:?}", id, m);
-
-            // TODO: metric or log
-            // TODO: reply disconnect
         }
         NoReply::done()
     }
@@ -196,8 +181,8 @@ pub fn shuffle_reply_cast(
     m: ShuffleReplyMessage<NodeId>,
     service: &ClientServiceHandle,
 ) -> Result<()> {
-    // TODO: set options (e.g., priority, force_wakeup)
-    let client = ShuffleReplyCast::client(&service);
+    let mut client = ShuffleReplyCast::client(&service);
+    client.options_mut().priority = 200;
     track!(client.cast(peer.addr, (peer.local_id, m)))?;
     Ok(())
 }
@@ -206,14 +191,9 @@ pub fn shuffle_reply_cast(
 struct ShuffleReplyHandler(ServiceHandle);
 impl HandleCast<ShuffleReplyCast> for ShuffleReplyHandler {
     fn handle_cast(&self, (id, m): (LocalNodeId, ShuffleReplyMessage<NodeId>)) -> NoReply {
-        if let Some(node) = self.0.get_local_node(&id) {
+        if let Some(node) = self.0.get_local_node_or_disconnect(&id, &m.sender) {
             let m = RpcMessage::Hyparview(ProtocolMessage::ShuffleReply(m));
             node.send_rpc_message(m);
-        } else {
-            println!("# UNKNOWN NODE: {:?}, {:?}", id, m);
-
-            // TODO: metric or log
-            // TODO: reply disconnect
         }
         NoReply::done()
     }
@@ -235,7 +215,6 @@ pub fn disconnect_cast(
     m: DisconnectMessage<NodeId>,
     service: &ClientServiceHandle,
 ) -> Result<()> {
-    // TODO: set options (e.g., priority, force_wakeup)
     let client = DisconnectCast::client(&service);
     track!(client.cast(peer.addr, (peer.local_id, m)))?;
     Ok(())
@@ -248,10 +227,6 @@ impl HandleCast<DisconnectCast> for DisconnectHandler {
         if let Some(node) = self.0.get_local_node(&id) {
             let m = RpcMessage::Hyparview(ProtocolMessage::Disconnect(m));
             node.send_rpc_message(m);
-        } else {
-            println!("# UNKNOWN NODE: {:?}, {:?}", id, m);
-            // TODO: metric or log
-            // TODO: reply disconnect
         }
         NoReply::done()
     }

@@ -35,8 +35,8 @@ pub fn gossip_cast(
     m: GossipMessage<System>,
     service: &ClientServiceHandle,
 ) -> Result<()> {
-    // TODO: set options (e.g., priority, force_wakeup)
-    let client = GossipCast::client(&service);
+    let mut client = GossipCast::client(&service);
+    client.options_mut().max_queue_len = Some(4096); // TODO:
     track!(client.cast(peer.addr, (peer.local_id, m)))?;
     Ok(())
 }
@@ -45,13 +45,9 @@ pub fn gossip_cast(
 struct GossipHandler(ServiceHandle);
 impl HandleCast<GossipCast> for GossipHandler {
     fn handle_cast(&self, (id, m): (LocalNodeId, GossipMessage<System>)) -> NoReply {
-        if let Some(node) = self.0.get_local_node(&id) {
+        if let Some(node) = self.0.get_local_node_or_disconnect(&id, &m.sender) {
             let m = RpcMessage::Plumtree(ProtocolMessage::Gossip(m));
             node.send_rpc_message(m);
-        } else {
-            println!("# UNKNOWN NODE: {:?}, {:?}", id, m);
-            // TODO: metric or log
-            // TODO: reply disconnect
         }
         NoReply::done()
     }
@@ -73,8 +69,9 @@ pub fn ihave_cast(
     m: IhaveMessage<System>,
     service: &ClientServiceHandle,
 ) -> Result<()> {
-    // TODO: set options (e.g., priority, force_wakeup)
-    let client = IhaveCast::client(&service);
+    let mut client = IhaveCast::client(&service);
+    client.options_mut().priority = 200;
+    client.options_mut().max_queue_len = Some(4096); // TODO: parameter
     track!(client.cast(peer.addr, (peer.local_id, m)))?;
     Ok(())
 }
@@ -83,13 +80,9 @@ pub fn ihave_cast(
 struct IhaveHandler(ServiceHandle);
 impl HandleCast<IhaveCast> for IhaveHandler {
     fn handle_cast(&self, (id, m): (LocalNodeId, IhaveMessage<System>)) -> NoReply {
-        if let Some(node) = self.0.get_local_node(&id) {
+        if let Some(node) = self.0.get_local_node_or_disconnect(&id, &m.sender) {
             let m = RpcMessage::Plumtree(ProtocolMessage::Ihave(m));
             node.send_rpc_message(m);
-        } else {
-            println!("# UNKNOWN NODE: {:?}, {:?}", id, m);
-            // TODO: metric or log
-            // TODO: reply disconnect
         }
         NoReply::done()
     }
@@ -111,7 +104,6 @@ pub fn graft_cast(
     m: GraftMessage<System>,
     service: &ClientServiceHandle,
 ) -> Result<()> {
-    // TODO: set options (e.g., priority, force_wakeup)
     let client = GraftCast::client(&service);
     track!(client.cast(peer.addr, (peer.local_id, m)))?;
     Ok(())
@@ -121,13 +113,9 @@ pub fn graft_cast(
 struct GraftHandler(ServiceHandle);
 impl HandleCast<GraftCast> for GraftHandler {
     fn handle_cast(&self, (id, m): (LocalNodeId, GraftMessage<System>)) -> NoReply {
-        if let Some(node) = self.0.get_local_node(&id) {
+        if let Some(node) = self.0.get_local_node_or_disconnect(&id, &m.sender) {
             let m = RpcMessage::Plumtree(ProtocolMessage::Graft(m));
             node.send_rpc_message(m);
-        } else {
-            println!("# UNKNOWN NODE: {:?}, {:?}", id, m);
-            // TODO: metric or log
-            // TODO: reply disconnect
         }
         NoReply::done()
     }
@@ -149,7 +137,6 @@ pub fn prune_cast(
     m: PruneMessage<System>,
     service: &ClientServiceHandle,
 ) -> Result<()> {
-    // TODO: set options (e.g., priority, force_wakeup)
     let client = PruneCast::client(&service);
     track!(client.cast(peer.addr, (peer.local_id, m)))?;
     Ok(())
@@ -159,13 +146,9 @@ pub fn prune_cast(
 struct PruneHandler(ServiceHandle);
 impl HandleCast<PruneCast> for PruneHandler {
     fn handle_cast(&self, (id, m): (LocalNodeId, PruneMessage<System>)) -> NoReply {
-        if let Some(node) = self.0.get_local_node(&id) {
+        if let Some(node) = self.0.get_local_node_or_disconnect(&id, &m.sender) {
             let m = RpcMessage::Plumtree(ProtocolMessage::Prune(m));
             node.send_rpc_message(m);
-        } else {
-            println!("# UNKNOWN NODE: {:?}, {:?}", id, m);
-            // TODO: metric or log
-            // TODO: reply disconnect
         }
         NoReply::done()
     }
