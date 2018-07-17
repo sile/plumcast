@@ -13,11 +13,11 @@ use std::net::SocketAddr;
 use std::sync::atomic::{AtomicUsize, Ordering};
 use std::sync::Arc;
 
-use node::{LocalNodeId, NodeHandle, NodeId};
+use node::{LocalNodeId, MessagePayload, NodeHandle, NodeId};
 use rpc::{self, RpcMessage};
 use {Error, ErrorKind, Result};
 
-type LocalNodes = Arc<AtomicImmut<HashMap<LocalNodeId, NodeHandle>>>;
+type LocalNodes<M> = Arc<AtomicImmut<HashMap<LocalNodeId, NodeHandle<M>>>>;
 
 #[derive(Debug)]
 pub struct ServiceBuilder {
@@ -43,9 +43,10 @@ impl ServiceBuilder {
         self
     }
 
-    pub fn finish<S>(&mut self, spawner: S) -> Service<S>
+    pub fn finish<S, M>(&mut self, spawner: S) -> Service<S, M>
     where
         S: Clone + Spawn + Send + 'static,
+        M: MessagePayload,
     {
         let (command_tx, command_rx) = mpsc::channel();
         let rpc_client_service = self.rpc_client_service_builder.finish(spawner.clone());
@@ -72,26 +73,27 @@ impl ServiceBuilder {
 }
 
 #[derive(Debug)]
-pub struct Service<S> {
+pub struct Service<S, M: MessagePayload> {
     logger: Logger,
-    command_rx: mpsc::Receiver<Command>, // NOTE: infinite stream
+    command_rx: mpsc::Receiver<Command<M>>, // NOTE: infinite stream
     rpc_server: RpcServer<S>,
     rpc_client_service: RpcClientService,
-    handle: ServiceHandle,
+    handle: ServiceHandle<M>,
 }
-impl<S> Service<S>
+impl<S, M> Service<S, M>
 where
     S: Clone + Spawn + Send + 'static,
+    M: MessagePayload,
 {
     pub fn new(rpc_server_bind_addr: SocketAddr, spawner: S) -> Self {
         ServiceBuilder::new(rpc_server_bind_addr).finish(spawner)
     }
 
-    pub fn handle(&self) -> ServiceHandle {
+    pub fn handle(&self) -> ServiceHandle<M> {
         self.handle.clone()
     }
 
-    fn handle_command(&mut self, command: Command) {
+    fn handle_command(&mut self, command: Command<M>) {
         match command {
             Command::Register(node) => {
                 info!(self.logger, "Registers a local node: {:?}", node);
@@ -112,9 +114,10 @@ where
         }
     }
 }
-impl<S> Future for Service<S>
+impl<S, M> Future for Service<S, M>
 where
     S: Clone + Spawn + Send + 'static,
+    M: MessagePayload,
 {
     type Item = ();
     type Error = Error;
@@ -137,14 +140,14 @@ where
 }
 
 #[derive(Debug, Clone)]
-pub struct ServiceHandle {
+pub struct ServiceHandle<M: MessagePayload> {
     server_addr: SocketAddr,
-    command_tx: mpsc::Sender<Command>,
+    command_tx: mpsc::Sender<Command<M>>,
     rpc_service: RpcClientServiceHandle,
-    local_nodes: LocalNodes,
+    local_nodes: LocalNodes<M>,
     next_local_id: Arc<AtomicUsize>,
 }
-impl ServiceHandle {
+impl<M: MessagePayload> ServiceHandle<M> {
     pub(crate) fn generate_node_id(&self) -> NodeId {
         let local_id = LocalNodeId::new(self.next_local_id.fetch_add(1, Ordering::SeqCst) as u64);
         NodeId {
@@ -153,7 +156,7 @@ impl ServiceHandle {
         }
     }
 
-    pub(crate) fn get_local_node(&self, local_id: &LocalNodeId) -> Option<NodeHandle> {
+    pub(crate) fn get_local_node(&self, local_id: &LocalNodeId) -> Option<NodeHandle<M>> {
         self.local_nodes.load().get(local_id).cloned()
     }
 
@@ -161,7 +164,7 @@ impl ServiceHandle {
         &self,
         id: &LocalNodeId,
         sender: &NodeId,
-    ) -> Option<NodeHandle> {
+    ) -> Option<NodeHandle<M>> {
         if let Some(node) = self.local_nodes.load().get(id).cloned() {
             Some(node)
         } else {
@@ -178,7 +181,7 @@ impl ServiceHandle {
         }
     }
 
-    pub(crate) fn register_local_node(&self, node: NodeHandle) {
+    pub(crate) fn register_local_node(&self, node: NodeHandle<M>) {
         let command = Command::Register(node);
         let _ = self.command_tx.send(command);
     }
@@ -188,7 +191,7 @@ impl ServiceHandle {
         let _ = self.command_tx.send(command);
     }
 
-    pub(crate) fn send_message(&self, peer: NodeId, message: RpcMessage) -> Result<()> {
+    pub(crate) fn send_message(&self, peer: NodeId, message: RpcMessage<M>) -> Result<()> {
         match message {
             RpcMessage::Hyparview(m) => {
                 use hyparview::message::ProtocolMessage;
@@ -240,7 +243,7 @@ impl ServiceHandle {
 }
 
 #[derive(Debug)]
-enum Command {
-    Register(NodeHandle),
+enum Command<M: MessagePayload> {
+    Register(NodeHandle<M>),
     Deregister(LocalNodeId),
 }

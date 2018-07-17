@@ -88,7 +88,7 @@ fn main() -> Result<(), MainError> {
 }
 
 struct ChatNode {
-    inner: Node,
+    inner: Node<Vec<u8>>,
     message_rx: mpsc::Receiver<String>,
 }
 impl Future for ChatNode {

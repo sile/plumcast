@@ -6,65 +6,82 @@ use bytecodec::fixnum::{
 };
 use bytecodec::{ByteCount, Decode, Encode, Eos, Result, SizedEncode};
 use plumtree::message::{GossipMessage, GraftMessage, IhaveMessage, Message, PruneMessage};
+use std::marker::PhantomData;
 
 use super::node::{LocalNodeIdDecoder, LocalNodeIdEncoder, NodeIdDecoder, NodeIdEncoder};
-use node::{MessageId, System};
+use node::{MessageId, MessagePayload, System};
 use LocalNodeId;
 
-#[derive(Debug, Default)]
-pub struct GossipMessageDecoder {
+#[derive(Debug)]
+pub struct GossipMessageDecoder<M: MessagePayload> {
     destination: LocalNodeIdDecoder,
     sender: NodeIdDecoder,
-    message: MessageDecoder,
     round: U16beDecoder,
+    message: MessageDecoder<M>,
 }
-impl Decode for GossipMessageDecoder {
-    type Item = (LocalNodeId, GossipMessage<System>);
+impl<M: MessagePayload> Default for GossipMessageDecoder<M> {
+    fn default() -> Self {
+        GossipMessageDecoder {
+            destination: Default::default(),
+            sender: Default::default(),
+            round: Default::default(),
+            message: Default::default(),
+        }
+    }
+}
+impl<M: MessagePayload> Decode for GossipMessageDecoder<M> {
+    type Item = (LocalNodeId, GossipMessage<System<M>>);
 
     fn decode(&mut self, buf: &[u8], eos: Eos) -> Result<usize> {
         let mut offset = 0;
         bytecodec_try_decode!(self.destination, offset, buf, eos);
         bytecodec_try_decode!(self.sender, offset, buf, eos);
-        bytecodec_try_decode!(self.message, offset, buf, eos);
         bytecodec_try_decode!(self.round, offset, buf, eos);
+        bytecodec_try_decode!(self.message, offset, buf, eos);
         Ok(offset)
     }
 
     fn finish_decoding(&mut self) -> Result<Self::Item> {
         let destination = track!(self.destination.finish_decoding())?;
         let sender = track!(self.sender.finish_decoding())?;
-        let message = track!(self.message.finish_decoding())?;
         let round = track!(self.round.finish_decoding())?;
-        Ok((
-            destination,
-            GossipMessage {
-                sender,
-                message,
-                round,
-            },
-        ))
+        let message = track!(self.message.finish_decoding())?;
+        let gossip = GossipMessage {
+            sender,
+            round,
+            message,
+        };
+        Ok((destination, gossip))
     }
 
     fn requiring_bytes(&self) -> ByteCount {
         self.destination
             .requiring_bytes()
             .add_for_decoding(self.sender.requiring_bytes())
-            .add_for_decoding(self.message.requiring_bytes())
             .add_for_decoding(self.round.requiring_bytes())
+            .add_for_decoding(self.message.requiring_bytes())
     }
 
     fn is_idle(&self) -> bool {
-        self.round.is_idle()
+        self.round.is_idle() && self.message.is_idle()
     }
 }
 
-#[derive(Debug, Default)]
-struct MessageDecoder {
+#[derive(Debug)]
+struct MessageDecoder<M: MessagePayload> {
     id: MessageIdDecoder,
-    payload: MessagePayloadDecoder,
+    payload: M::Decoder,
 }
-impl Decode for MessageDecoder {
-    type Item = Message<System>;
+impl<M: MessagePayload> Default for MessageDecoder<M> {
+    fn default() -> Self {
+        MessageDecoder {
+            id: Default::default(),
+            payload: Default::default(),
+        }
+    }
+}
+impl<M: MessagePayload> Decode for MessageDecoder<M> {
+    type Item = Message<System<M>>;
 
     fn decode(&mut self, buf: &[u8], eos: Eos) -> Result<usize> {
         let mut offset = 0;
@@ -160,57 +177,82 @@ impl Decode for MessagePayloadDecoder {
     }
 }
 
-#[derive(Debug, Default)]
-pub struct GossipMessageEncoder {
+#[derive(Debug)]
+pub struct GossipMessageEncoder<M: MessagePayload> {
     destination: LocalNodeIdEncoder,
     sender: NodeIdEncoder,
-    message: MessageEncoder,
     round: U16beEncoder,
+    message: MessageEncoder<M>,
 }
-impl Encode for GossipMessageEncoder {
-    type Item = (LocalNodeId, GossipMessage<System>);
+impl<M: MessagePayload> Default for GossipMessageEncoder<M> {
+    fn default() -> Self {
+        GossipMessageEncoder {
+            destination: Default::default(),
+            sender: Default::default(),
+            round: Default::default(),
+            message: Default::default(),
+        }
+    }
+}
+impl<M: MessagePayload> Encode for GossipMessageEncoder<M> {
+    type Item = (LocalNodeId, GossipMessage<System<M>>);
 
     fn encode(&mut self, buf: &mut [u8], eos: Eos) -> Result<usize> {
         let mut offset = 0;
         bytecodec_try_encode!(self.destination, offset, buf, eos);
         bytecodec_try_encode!(self.sender, offset, buf, eos);
-        bytecodec_try_encode!(self.message, offset, buf, eos);
         bytecodec_try_encode!(self.round, offset, buf, eos);
+        bytecodec_try_encode!(self.message, offset, buf, eos);
         Ok(offset)
     }
 
     fn start_encoding(&mut self, item: Self::Item) -> Result<()> {
         track!(self.destination.start_encoding(item.0))?;
         track!(self.sender.start_encoding(item.1.sender))?;
-        track!(self.message.start_encoding(item.1.message))?;
         track!(self.round.start_encoding(item.1.round))?;
+        track!(self.message.start_encoding(item.1.message))?;
         Ok(())
     }
 
     fn requiring_bytes(&self) -> ByteCount {
-        ByteCount::Finite(self.exact_requiring_bytes())
+        self.destination
+            .requiring_bytes()
+            .add_for_encoding(self.sender.requiring_bytes())
+            .add_for_encoding(self.round.requiring_bytes())
+            .add_for_encoding(self.message.requiring_bytes())
     }
 
     fn is_idle(&self) -> bool {
-        self.round.is_idle()
+        self.round.is_idle() && self.message.is_idle()
     }
 }
-impl SizedEncode for GossipMessageEncoder {
+impl<M: MessagePayload> SizedEncode for GossipMessageEncoder<M>
+where
+    M::Encoder: SizedEncode,
+{
     fn exact_requiring_bytes(&self) -> u64 {
         self.destination.exact_requiring_bytes()
             + self.sender.exact_requiring_bytes()
-            + self.message.exact_requiring_bytes()
             + self.round.exact_requiring_bytes()
+            + self.message.exact_requiring_bytes()
     }
 }
 
-#[derive(Debug, Default)]
-struct MessageEncoder {
+#[derive(Debug)]
+struct MessageEncoder<M: MessagePayload> {
     id: MessageIdEncoder,
-    payload: MessagePayloadEncoder,
+    payload: M::Encoder,
 }
-impl Encode for MessageEncoder {
-    type Item = Message<System>;
+impl<M: MessagePayload> Default for MessageEncoder<M> {
+    fn default() -> Self {
+        MessageEncoder {
+            id: Default::default(),
+            payload: Default::default(),
+        }
+    }
+}
+impl<M: MessagePayload> Encode for MessageEncoder<M> {
+    type Item = Message<System<M>>;
 
     fn encode(&mut self, buf: &mut [u8], eos: Eos) -> Result<usize> {
         let mut offset = 0;
@@ -235,7 +277,10 @@ impl Encode for MessageEncoder {
         self.id.is_idle() && self.payload.is_idle()
     }
 }
-impl SizedEncode for MessageEncoder {
+impl<M: MessagePayload> SizedEncode for MessageEncoder<M>
+where
+    M::Encoder: SizedEncode,
+{
     fn exact_requiring_bytes(&self) -> u64 {
         self.id.exact_requiring_bytes() + self.payload.exact_requiring_bytes()
     }
@@ -315,16 +360,29 @@ impl SizedEncode for MessagePayloadEncoder {
     }
 }
 
-#[derive(Debug, Default)]
-pub struct IhaveMessageDecoder {
+#[derive(Debug)]
+pub struct IhaveMessageDecoder<M> {
     destination: LocalNodeIdDecoder,
     sender: NodeIdDecoder,
     message_id: MessageIdDecoder,
     round: U16beDecoder,
     realtime: U8Decoder,
+    _phantom: PhantomData<M>,
 }
-impl Decode for IhaveMessageDecoder {
-    type Item = (LocalNodeId, IhaveMessage<System>);
+impl<M> Default for IhaveMessageDecoder<M> {
+    fn default() -> Self {
+        IhaveMessageDecoder {
+            destination: Default::default(),
+            sender: Default::default(),
+            message_id: Default::default(),
+            round: Default::default(),
+            realtime: Default::default(),
+            _phantom: PhantomData,
+        }
+    }
+}
+impl<M: MessagePayload> Decode for IhaveMessageDecoder<M> {
+    type Item = (LocalNodeId, IhaveMessage<System<M>>);
 
     fn decode(&mut self, buf: &[u8], eos: Eos) -> Result<usize> {
         let mut offset = 0;
@@ -367,16 +425,29 @@ impl Decode for IhaveMessageDecoder {
     }
 }
 
-#[derive(Debug, Default)]
-pub struct IhaveMessageEncoder {
+#[derive(Debug)]
+pub struct IhaveMessageEncoder<M> {
     destination: LocalNodeIdEncoder,
     sender: NodeIdEncoder,
     message_id: MessageIdEncoder,
     round: U16beEncoder,
     realtime: U8Encoder,
+    _phantom: PhantomData<M>,
 }
-impl Encode for IhaveMessageEncoder {
-    type Item = (LocalNodeId, IhaveMessage<System>);
+impl<M> Default for IhaveMessageEncoder<M> {
+    fn default() -> Self {
+        IhaveMessageEncoder {
+            destination: Default::default(),
+            sender: Default::default(),
+            message_id: Default::default(),
+            round: Default::default(),
+            realtime: Default::default(),
+            _phantom: PhantomData,
+        }
+    }
+}
+impl<M: MessagePayload> Encode for IhaveMessageEncoder<M> {
+    type Item = (LocalNodeId, IhaveMessage<System<M>>);
 
     fn encode(&mut self, buf: &mut [u8], eos: Eos) -> Result<usize> {
         let mut offset = 0;
@@ -405,7 +476,7 @@ impl Encode for IhaveMessageEncoder {
         self.realtime.is_idle()
     }
 }
-impl SizedEncode for IhaveMessageEncoder {
+impl<M: MessagePayload> SizedEncode for IhaveMessageEncoder<M> {
     fn exact_requiring_bytes(&self) -> u64 {
         self.destination.exact_requiring_bytes()
             + self.sender.exact_requiring_bytes()
@@ -415,16 +486,29 @@ impl SizedEncode for IhaveMessageEncoder {
     }
 }
 
-#[derive(Debug, Default)]
-pub struct GraftMessageDecoder {
+#[derive(Debug)]
+pub struct GraftMessageDecoder<M> {
     destination: LocalNodeIdDecoder,
     sender: NodeIdDecoder,
     has_message_id: Peekable<U8Decoder>,
     message_id: MessageIdDecoder,
     round: U16beDecoder,
+    _phantom: PhantomData<M>,
 }
-impl Decode for GraftMessageDecoder {
-    type Item = (LocalNodeId, GraftMessage<System>);
+impl<M> Default for GraftMessageDecoder<M> {
+    fn default() -> Self {
+        GraftMessageDecoder {
+            destination: Default::default(),
+            sender: Default::default(),
+            has_message_id: Default::default(),
+            message_id: Default::default(),
+            round: Default::default(),
+            _phantom: PhantomData,
+        }
+    }
+}
+impl<M: MessagePayload> Decode for GraftMessageDecoder<M> {
+    type Item = (LocalNodeId, GraftMessage<System<M>>);
 
     fn decode(&mut self, buf: &[u8], eos: Eos) -> Result<usize> {
         let mut offset = 0;
@@ -475,16 +559,29 @@ impl Decode for GraftMessageDecoder {
     }
 }
 
-#[derive(Debug, Default)]
-pub struct GraftMessageEncoder {
+#[derive(Debug)]
+pub struct GraftMessageEncoder<M> {
     destination: LocalNodeIdEncoder,
     sender: NodeIdEncoder,
     has_message_id: U8Encoder,
     message_id: MessageIdEncoder,
     round: U16beEncoder,
+    _phantom: PhantomData<M>,
 }
-impl Encode for GraftMessageEncoder {
-    type Item = (LocalNodeId, GraftMessage<System>);
+impl<M> Default for GraftMessageEncoder<M> {
+    fn default() -> Self {
+        GraftMessageEncoder {
+            destination: Default::default(),
+            sender: Default::default(),
+            has_message_id: Default::default(),
+            message_id: Default::default(),
+            round: Default::default(),
+            _phantom: PhantomData,
+        }
+    }
+}
+impl<M: MessagePayload> Encode for GraftMessageEncoder<M> {
+    type Item = (LocalNodeId, GraftMessage<System<M>>);
 
     fn encode(&mut self, buf: &mut [u8], eos: Eos) -> Result<usize> {
         let mut offset = 0;
@@ -517,7 +614,7 @@ impl Encode for GraftMessageEncoder {
         self.round.is_idle()
     }
 }
-impl SizedEncode for GraftMessageEncoder {
+impl<M: MessagePayload> SizedEncode for GraftMessageEncoder<M> {
     fn exact_requiring_bytes(&self) -> u64 {
         self.destination.exact_requiring_bytes()
             + self.sender.exact_requiring_bytes()
@@ -527,13 +624,23 @@ impl SizedEncode for GraftMessageEncoder {
     }
 }
 
-#[derive(Debug, Default)]
-pub struct PruneMessageDecoder {
+#[derive(Debug)]
+pub struct PruneMessageDecoder<M> {
     destination: LocalNodeIdDecoder,
     sender: NodeIdDecoder,
+    _phantom: PhantomData<M>,
 }
-impl Decode for PruneMessageDecoder {
-    type Item = (LocalNodeId, PruneMessage<System>);
+impl<M> Default for PruneMessageDecoder<M> {
+    fn default() -> Self {
+        PruneMessageDecoder {
+            destination: Default::default(),
+            sender: Default::default(),
+            _phantom: PhantomData,
+        }
+    }
+}
+impl<M: MessagePayload> Decode for PruneMessageDecoder<M> {
+    type Item = (LocalNodeId, PruneMessage<System<M>>);
 
     fn decode(&mut self, buf: &[u8], eos: Eos) -> Result<usize> {
         let mut offset = 0;
@@ -561,13 +668,23 @@ impl Decode for PruneMessageDecoder {
     }
 }
 
-#[derive(Debug, Default)]
-pub struct PruneMessageEncoder {
+#[derive(Debug)]
+pub struct PruneMessageEncoder<M> {
     destination: LocalNodeIdEncoder,
     sender: NodeIdEncoder,
+    _phantom: PhantomData<M>,
 }
-impl Encode for PruneMessageEncoder {
-    type Item = (LocalNodeId, PruneMessage<System>);
+impl<M> Default for PruneMessageEncoder<M> {
+    fn default() -> Self {
+        PruneMessageEncoder {
+            destination: Default::default(),
+            sender: Default::default(),
+            _phantom: PhantomData,
+        }
+    }
+}
+impl<M: MessagePayload> Encode for PruneMessageEncoder<M> {
+    type Item = (LocalNodeId, PruneMessage<System<M>>);
 
     fn encode(&mut self, buf: &mut [u8], eos: Eos) -> Result<usize> {
         let mut offset = 0;
@@ -590,7 +707,7 @@ impl Encode for PruneMessageEncoder {
         self.sender.is_idle()
     }
 }
-impl SizedEncode for PruneMessageEncoder {
+impl<M: MessagePayload> SizedEncode for PruneMessageEncoder<M> {
     fn exact_requiring_bytes(&self) -> u64 {
         self.destination.exact_requiring_bytes() + self.sender.exact_requiring_bytes()
     }

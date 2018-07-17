@@ -2,17 +2,18 @@ use fibers_rpc::client::ClientServiceHandle;
 use fibers_rpc::server::{HandleCast, NoReply, ServerBuilder};
 use fibers_rpc::{Cast, ProcedureId};
 use plumtree::message::{GossipMessage, GraftMessage, IhaveMessage, ProtocolMessage, PruneMessage};
+use std::marker::PhantomData;
 
 use super::RpcMessage;
 use codec::plumtree::{
     GossipMessageDecoder, GossipMessageEncoder, GraftMessageDecoder, GraftMessageEncoder,
     IhaveMessageDecoder, IhaveMessageEncoder, PruneMessageDecoder, PruneMessageEncoder,
 };
-use node::System;
+use node::{MessagePayload, System};
 use service::ServiceHandle;
 use {LocalNodeId, NodeId, Result};
 
-pub fn register_handlers(rpc: &mut ServerBuilder, service: ServiceHandle) {
+pub fn register_handlers<M: MessagePayload>(rpc: &mut ServerBuilder, service: ServiceHandle<M>) {
     rpc.add_cast_handler(GossipHandler(service.clone()));
     rpc.add_cast_handler(IhaveHandler(service.clone()));
     rpc.add_cast_handler(GraftHandler(service.clone()));
@@ -20,19 +21,19 @@ pub fn register_handlers(rpc: &mut ServerBuilder, service: ServiceHandle) {
 }
 
 #[derive(Debug)]
-pub struct GossipCast;
-impl Cast for GossipCast {
+pub struct GossipCast<M>(PhantomData<M>);
+impl<M: MessagePayload> Cast for GossipCast<M> {
     const ID: ProcedureId = ProcedureId(0x17CD_0000);
     const NAME: &'static str = "plumtree.gossip";
 
-    type Notification = (LocalNodeId, GossipMessage<System>);
-    type Decoder = GossipMessageDecoder;
-    type Encoder = GossipMessageEncoder;
+    type Notification = (LocalNodeId, GossipMessage<System<M>>);
+    type Decoder = GossipMessageDecoder<M>;
+    type Encoder = GossipMessageEncoder<M>;
 }
 
-pub fn gossip_cast(
+pub fn gossip_cast<M: MessagePayload>(
     peer: NodeId,
-    m: GossipMessage<System>,
+    m: GossipMessage<System<M>>,
     service: &ClientServiceHandle,
 ) -> Result<()> {
     let mut client = GossipCast::client(&service);
@@ -42,9 +43,9 @@ pub fn gossip_cast(
 }
 
 #[derive(Debug)]
-struct GossipHandler(ServiceHandle);
-impl HandleCast<GossipCast> for GossipHandler {
-    fn handle_cast(&self, (id, m): (LocalNodeId, GossipMessage<System>)) -> NoReply {
+struct GossipHandler<M: MessagePayload>(ServiceHandle<M>);
+impl<M: MessagePayload> HandleCast<GossipCast<M>> for GossipHandler<M> {
+    fn handle_cast(&self, (id, m): (LocalNodeId, GossipMessage<System<M>>)) -> NoReply {
         if let Some(node) = self.0.get_local_node_or_disconnect(&id, &m.sender) {
             let m = RpcMessage::Plumtree(ProtocolMessage::Gossip(m));
             node.send_rpc_message(m);
@@ -54,19 +55,19 @@ impl HandleCast<GossipCast> for GossipHandler {
 }
 
 #[derive(Debug)]
-pub struct IhaveCast;
-impl Cast for IhaveCast {
+pub struct IhaveCast<M>(PhantomData<M>);
+impl<M: MessagePayload> Cast for IhaveCast<M> {
     const ID: ProcedureId = ProcedureId(0x17CD_0001);
     const NAME: &'static str = "plumtree.ihave";
 
-    type Notification = (LocalNodeId, IhaveMessage<System>);
-    type Decoder = IhaveMessageDecoder;
-    type Encoder = IhaveMessageEncoder;
+    type Notification = (LocalNodeId, IhaveMessage<System<M>>);
+    type Decoder = IhaveMessageDecoder<M>;
+    type Encoder = IhaveMessageEncoder<M>;
 }
 
-pub fn ihave_cast(
+pub fn ihave_cast<M: MessagePayload>(
     peer: NodeId,
-    m: IhaveMessage<System>,
+    m: IhaveMessage<System<M>>,
     service: &ClientServiceHandle,
 ) -> Result<()> {
     let mut client = IhaveCast::client(&service);
@@ -77,9 +78,9 @@ pub fn ihave_cast(
 }
 
 #[derive(Debug)]
-struct IhaveHandler(ServiceHandle);
-impl HandleCast<IhaveCast> for IhaveHandler {
-    fn handle_cast(&self, (id, m): (LocalNodeId, IhaveMessage<System>)) -> NoReply {
+struct IhaveHandler<M: MessagePayload>(ServiceHandle<M>);
+impl<M: MessagePayload> HandleCast<IhaveCast<M>> for IhaveHandler<M> {
+    fn handle_cast(&self, (id, m): (LocalNodeId, IhaveMessage<System<M>>)) -> NoReply {
         if let Some(node) = self.0.get_local_node_or_disconnect(&id, &m.sender) {
             let m = RpcMessage::Plumtree(ProtocolMessage::Ihave(m));
             node.send_rpc_message(m);
@@ -89,19 +90,19 @@ impl HandleCast<IhaveCast> for IhaveHandler {
 }
 
 #[derive(Debug)]
-pub struct GraftCast;
-impl Cast for GraftCast {
+pub struct GraftCast<M>(PhantomData<M>);
+impl<M: MessagePayload> Cast for GraftCast<M> {
     const ID: ProcedureId = ProcedureId(0x17CD_0002);
     const NAME: &'static str = "plumtree.graft";
 
-    type Notification = (LocalNodeId, GraftMessage<System>);
-    type Decoder = GraftMessageDecoder;
-    type Encoder = GraftMessageEncoder;
+    type Notification = (LocalNodeId, GraftMessage<System<M>>);
+    type Decoder = GraftMessageDecoder<M>;
+    type Encoder = GraftMessageEncoder<M>;
 }
 
-pub fn graft_cast(
+pub fn graft_cast<M: MessagePayload>(
     peer: NodeId,
-    m: GraftMessage<System>,
+    m: GraftMessage<System<M>>,
     service: &ClientServiceHandle,
 ) -> Result<()> {
     let client = GraftCast::client(&service);
@@ -110,9 +111,9 @@ pub fn graft_cast(
 }
 
 #[derive(Debug)]
-struct GraftHandler(ServiceHandle);
-impl HandleCast<GraftCast> for GraftHandler {
-    fn handle_cast(&self, (id, m): (LocalNodeId, GraftMessage<System>)) -> NoReply {
+struct GraftHandler<M: MessagePayload>(ServiceHandle<M>);
+impl<M: MessagePayload> HandleCast<GraftCast<M>> for GraftHandler<M> {
+    fn handle_cast(&self, (id, m): (LocalNodeId, GraftMessage<System<M>>)) -> NoReply {
         if let Some(node) = self.0.get_local_node_or_disconnect(&id, &m.sender) {
             let m = RpcMessage::Plumtree(ProtocolMessage::Graft(m));
             node.send_rpc_message(m);
@@ -122,19 +123,19 @@ impl HandleCast<GraftCast> for GraftHandler {
 }
 
 #[derive(Debug)]
-pub struct PruneCast;
-impl Cast for PruneCast {
+pub struct PruneCast<M>(PhantomData<M>);
+impl<M: MessagePayload> Cast for PruneCast<M> {
     const ID: ProcedureId = ProcedureId(0x17CD_0003);
     const NAME: &'static str = "plumtree.prune";
 
-    type Notification = (LocalNodeId, PruneMessage<System>);
-    type Decoder = PruneMessageDecoder;
-    type Encoder = PruneMessageEncoder;
+    type Notification = (LocalNodeId, PruneMessage<System<M>>);
+    type Decoder = PruneMessageDecoder<M>;
+    type Encoder = PruneMessageEncoder<M>;
 }
 
-pub fn prune_cast(
+pub fn prune_cast<M: MessagePayload>(
     peer: NodeId,
-    m: PruneMessage<System>,
+    m: PruneMessage<System<M>>,
     service: &ClientServiceHandle,
 ) -> Result<()> {
     let client = PruneCast::client(&service);
@@ -143,9 +144,9 @@ pub fn prune_cast(
 }
 
 #[derive(Debug)]
-struct PruneHandler(ServiceHandle);
-impl HandleCast<PruneCast> for PruneHandler {
-    fn handle_cast(&self, (id, m): (LocalNodeId, PruneMessage<System>)) -> NoReply {
+struct PruneHandler<M: MessagePayload>(ServiceHandle<M>);
+impl<M: MessagePayload> HandleCast<PruneCast<M>> for PruneHandler<M> {
+    fn handle_cast(&self, (id, m): (LocalNodeId, PruneMessage<System<M>>)) -> NoReply {
         if let Some(node) = self.0.get_local_node_or_disconnect(&id, &m.sender) {
             let m = RpcMessage::Plumtree(ProtocolMessage::Prune(m));
             node.send_rpc_message(m);

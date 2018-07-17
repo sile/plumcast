@@ -13,10 +13,11 @@ use codec::hyparview::{
     NeighborMessageEncoder, ShuffleMessageDecoder, ShuffleMessageEncoder,
     ShuffleReplyMessageDecoder, ShuffleReplyMessageEncoder,
 };
+use node::MessagePayload;
 use service::ServiceHandle;
 use {LocalNodeId, NodeId, Result};
 
-pub fn register_handlers(rpc: &mut ServerBuilder, service: ServiceHandle) {
+pub fn register_handlers<M: MessagePayload>(rpc: &mut ServerBuilder, service: ServiceHandle<M>) {
     rpc.add_cast_handler(JoinHandler(service.clone()));
     rpc.add_cast_handler(ForwardJoinHandler(service.clone()));
     rpc.add_cast_handler(NeighborHandler(service.clone()));
@@ -49,8 +50,8 @@ pub fn join_cast(
 }
 
 #[derive(Debug)]
-struct JoinHandler(ServiceHandle);
-impl HandleCast<JoinCast> for JoinHandler {
+struct JoinHandler<M: MessagePayload>(ServiceHandle<M>);
+impl<M: MessagePayload> HandleCast<JoinCast> for JoinHandler<M> {
     fn handle_cast(&self, (id, m): (LocalNodeId, JoinMessage<NodeId>)) -> NoReply {
         if let Some(node) = self.0.get_local_node_or_disconnect(&id, &m.sender) {
             let m = RpcMessage::Hyparview(ProtocolMessage::Join(m));
@@ -84,8 +85,8 @@ pub fn forward_join_cast(
 }
 
 #[derive(Debug)]
-struct ForwardJoinHandler(ServiceHandle);
-impl HandleCast<ForwardJoinCast> for ForwardJoinHandler {
+struct ForwardJoinHandler<M: MessagePayload>(ServiceHandle<M>);
+impl<M: MessagePayload> HandleCast<ForwardJoinCast> for ForwardJoinHandler<M> {
     fn handle_cast(&self, (id, m): (LocalNodeId, ForwardJoinMessage<NodeId>)) -> NoReply {
         if let Some(node) = self.0.get_local_node_or_disconnect(&id, &m.sender) {
             let m = RpcMessage::Hyparview(ProtocolMessage::ForwardJoin(m));
@@ -120,8 +121,8 @@ pub fn neighbor_cast(
 }
 
 #[derive(Debug)]
-struct NeighborHandler(ServiceHandle);
-impl HandleCast<NeighborCast> for NeighborHandler {
+struct NeighborHandler<M: MessagePayload>(ServiceHandle<M>);
+impl<M: MessagePayload> HandleCast<NeighborCast> for NeighborHandler<M> {
     fn handle_cast(&self, (id, m): (LocalNodeId, NeighborMessage<NodeId>)) -> NoReply {
         if let Some(node) = self.0.get_local_node_or_disconnect(&id, &m.sender) {
             let m = RpcMessage::Hyparview(ProtocolMessage::Neighbor(m));
@@ -154,8 +155,8 @@ pub fn shuffle_cast(
 }
 
 #[derive(Debug)]
-struct ShuffleHandler(ServiceHandle);
-impl HandleCast<ShuffleCast> for ShuffleHandler {
+struct ShuffleHandler<M: MessagePayload>(ServiceHandle<M>);
+impl<M: MessagePayload> HandleCast<ShuffleCast> for ShuffleHandler<M> {
     fn handle_cast(&self, (id, m): (LocalNodeId, ShuffleMessage<NodeId>)) -> NoReply {
         if let Some(node) = self.0.get_local_node_or_disconnect(&id, &m.sender) {
             let m = RpcMessage::Hyparview(ProtocolMessage::Shuffle(m));
@@ -188,8 +189,8 @@ pub fn shuffle_reply_cast(
 }
 
 #[derive(Debug)]
-struct ShuffleReplyHandler(ServiceHandle);
-impl HandleCast<ShuffleReplyCast> for ShuffleReplyHandler {
+struct ShuffleReplyHandler<M: MessagePayload>(ServiceHandle<M>);
+impl<M: MessagePayload> HandleCast<ShuffleReplyCast> for ShuffleReplyHandler<M> {
     fn handle_cast(&self, (id, m): (LocalNodeId, ShuffleReplyMessage<NodeId>)) -> NoReply {
         if let Some(node) = self.0.get_local_node_or_disconnect(&id, &m.sender) {
             let m = RpcMessage::Hyparview(ProtocolMessage::ShuffleReply(m));
@@ -221,8 +222,8 @@ pub fn disconnect_cast(
 }
 
 #[derive(Debug)]
-struct DisconnectHandler(ServiceHandle);
-impl HandleCast<DisconnectCast> for DisconnectHandler {
+struct DisconnectHandler<M: MessagePayload>(ServiceHandle<M>);
+impl<M: MessagePayload> HandleCast<DisconnectCast> for DisconnectHandler<M> {
     fn handle_cast(&self, (id, m): (LocalNodeId, DisconnectMessage<NodeId>)) -> NoReply {
         if let Some(node) = self.0.get_local_node(&id) {
             let m = RpcMessage::Hyparview(ProtocolMessage::Disconnect(m));

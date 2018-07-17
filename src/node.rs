@@ -7,6 +7,7 @@ use plumtree::{self, Action as PlumtreeAction, Node as PlumtreeNode};
 use rand::{self, Rng, SeedableRng, StdRng};
 use slog::Logger;
 use std::collections::VecDeque;
+use std::marker::PhantomData;
 use std::net::SocketAddr;
 use std::time::Duration;
 
@@ -33,18 +34,22 @@ pub struct NodeId {
 }
 
 #[derive(Debug, Clone)]
-pub struct NodeHandle {
+pub struct NodeHandle<M: MessagePayload> {
     local_id: LocalNodeId,
-    message_tx: mpsc::Sender<RpcMessage>,
+    message_tx: mpsc::Sender<RpcMessage<M>>,
 }
-impl NodeHandle {
+impl<M: MessagePayload> NodeHandle<M> {
     pub fn local_id(&self) -> LocalNodeId {
         self.local_id
     }
 
-    pub fn send_rpc_message(&self, message: RpcMessage) {
+    pub fn send_rpc_message(&self, message: RpcMessage<M>) {
         let _ = self.message_tx.send(message);
     }
+}
+impl MessagePayload for Vec<u8> {
+    type Encoder = ::bytecodec::bytes::BytesEncoder<Vec<u8>>;
+    type Decoder = ::bytecodec::bytes::RemainingBytesDecoder;
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
@@ -54,11 +59,17 @@ pub struct MessageId {
 }
 
 #[derive(Debug)]
-pub struct System;
-impl plumtree::System for System {
+pub struct System<M>(PhantomData<M>);
+impl<M: MessagePayload> plumtree::System for System<M> {
     type NodeId = NodeId;
     type MessageId = MessageId;
-    type MessagePayload = Vec<u8>; // TODO: Arc<T: MessagePayload>
+    type MessagePayload = M;
+}
+
+// TODO: remove Sync, Debug
+pub trait MessagePayload: Sized + Clone + Send + Sync + 'static + ::std::fmt::Debug {
+    type Encoder: ::bytecodec::Encode<Item = Self> + Default + Send + 'static + ::std::fmt::Debug; // TODO: remove Debug
+    type Decoder: ::bytecodec::Decode<Item = Self> + Default + Send + 'static + ::std::fmt::Debug;
 }
 
 const TICK_MS: u64 = 1000; // TODO
@@ -67,21 +78,21 @@ const HYPARVIEW_SYNC_INTERVAL_TICKS: usize = 31;
 const HYPARVIEW_FILL_INTERVAL_TICKS: usize = 20;
 
 #[derive(Debug)]
-pub struct Node {
+pub struct Node<M: MessagePayload> {
     logger: Logger,
     id: NodeId,
     local_id: LocalNodeId, // TODO: remove
-    service: ServiceHandle,
-    message_rx: mpsc::Receiver<RpcMessage>,
+    service: ServiceHandle<M>,
+    message_rx: mpsc::Receiver<RpcMessage<M>>,
     hyparview_node: HyparviewNode<NodeId, StdRng>,
-    plumtree_node: PlumtreeNode<System>,
+    plumtree_node: PlumtreeNode<System<M>>,
     message_seqno: u64,
-    deliverable_messages: VecDeque<Message<System>>,
+    deliverable_messages: VecDeque<Message<System<M>>>,
     tick: Timeout, // TODO: tick_timeout
     ticks: usize,  // or clock
 }
-impl Node {
-    pub fn new(logger: Logger, service: ServiceHandle) -> Node {
+impl<M: MessagePayload> Node<M> {
+    pub fn new(logger: Logger, service: ServiceHandle<M>) -> Self {
         let id = service.generate_node_id();
         let (message_tx, message_rx) = mpsc::channel();
         let handle = NodeHandle {
@@ -116,7 +127,7 @@ impl Node {
         self.hyparview_node.join(contact_peer);
     }
 
-    pub fn broadcast(&mut self, message: Vec<u8>) {
+    pub fn broadcast(&mut self, message: M) {
         warn!(self.logger, "[TODO] Broadcast: {:?}", message);
         let mid = MessageId {
             node_id: self.id.clone(),
@@ -173,7 +184,7 @@ impl Node {
         }
     }
 
-    fn handle_plumtree_action(&mut self, action: PlumtreeAction<System>) {
+    fn handle_plumtree_action(&mut self, action: PlumtreeAction<System<M>>) {
         warn!(self.logger, "[TODO] Action: {:?}", action);
         match action {
             PlumtreeAction::Send {
@@ -196,7 +207,7 @@ impl Node {
         }
     }
 
-    fn handle_rpc_message(&mut self, message: RpcMessage) {
+    fn handle_rpc_message(&mut self, message: RpcMessage<M>) {
         match message {
             RpcMessage::Hyparview(m) => {
                 warn!(self.logger, "[TODO] Recv: {:?}", m); // TODO: remove
@@ -220,8 +231,8 @@ impl Node {
         }
     }
 }
-impl Stream for Node {
-    type Item = Message<System>;
+impl<M: MessagePayload> Stream for Node<M> {
+    type Item = Message<System<M>>;
     type Error = Error;
 
     fn poll(&mut self) -> Poll<Option<Self::Item>, Self::Error> {
@@ -267,7 +278,7 @@ impl Stream for Node {
         Ok(Async::NotReady)
     }
 }
-impl Drop for Node {
+impl<M: MessagePayload> Drop for Node<M> {
     fn drop(&mut self) {
         self.service.deregister_local_node(self.local_id);
         self.leave();
