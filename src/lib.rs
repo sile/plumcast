@@ -15,13 +15,15 @@ extern crate trackable;
 
 pub use error::{Error, ErrorKind};
 pub use message::{Message, MessageId, MessagePayload};
-pub use node::{LocalNodeId, Node, NodeId};
+pub use node::Node;
+pub use node_id::{LocalNodeId, NodeId};
 pub use service::{Service, ServiceBuilder, ServiceHandle};
 
 mod codec;
 mod error;
 mod message;
 mod node;
+mod node_id;
 mod rpc;
 mod service;
 

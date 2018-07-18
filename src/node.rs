@@ -9,29 +9,10 @@ use slog::Logger;
 use std::collections::VecDeque;
 use std::fmt;
 use std::marker::PhantomData;
-use std::net::SocketAddr;
 use std::time::Duration;
 
 use rpc::RpcMessage;
-use {Error, ErrorKind, Message, MessageId, MessagePayload, ServiceHandle};
-
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, PartialOrd, Ord)]
-pub struct LocalNodeId(u64);
-impl LocalNodeId {
-    pub fn new(id: u64) -> Self {
-        LocalNodeId(id)
-    }
-
-    pub fn value(&self) -> u64 {
-        self.0
-    }
-}
-
-#[derive(Debug, Clone, PartialEq, Eq, Hash)]
-pub struct NodeId {
-    pub addr: SocketAddr, // TODO: location(?)
-    pub local_id: LocalNodeId,
-}
+use {Error, ErrorKind, LocalNodeId, Message, MessageId, MessagePayload, NodeId, ServiceHandle};
 
 #[derive(Clone)]
 pub struct NodeHandle<M: MessagePayload> {
@@ -90,7 +71,7 @@ impl<M: MessagePayload> Node<M> {
         let id = service.generate_node_id();
         let (message_tx, message_rx) = mpsc::channel();
         let handle = NodeHandle {
-            local_id: id.local_id,
+            local_id: id.local_id(),
             message_tx,
         };
         service.register_local_node(handle);
@@ -98,7 +79,7 @@ impl<M: MessagePayload> Node<M> {
         Node {
             logger,
             id: id.clone(),
-            local_id: id.local_id,
+            local_id: id.local_id(),
             service,
             message_rx,
             hyparview_node: HyparviewNode::with_options(

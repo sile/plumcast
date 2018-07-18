@@ -15,9 +15,9 @@ use std::sync::atomic::{AtomicUsize, Ordering};
 use std::sync::Arc;
 
 use metrics::ServiceMetrics;
-use node::{LocalNodeId, NodeHandle, NodeId};
+use node::NodeHandle;
 use rpc::{self, RpcMessage};
-use {Error, ErrorKind, MessagePayload, Result};
+use {Error, ErrorKind, LocalNodeId, MessagePayload, NodeId, Result};
 
 type LocalNodes<M> = Arc<AtomicImmut<HashMap<LocalNodeId, NodeHandle<M>>>>;
 
@@ -241,10 +241,7 @@ impl<M: MessagePayload> ServiceHandle<M> {
 
     pub(crate) fn generate_node_id(&self) -> NodeId {
         let local_id = LocalNodeId::new(self.next_local_id.fetch_add(1, Ordering::SeqCst) as u64);
-        NodeId {
-            addr: self.server_addr,
-            local_id,
-        }
+        NodeId::new(self.server_addr, local_id)
     }
 
     pub(crate) fn get_local_node(&self, local_id: &LocalNodeId) -> Option<NodeHandle<M>> {
@@ -262,10 +259,7 @@ impl<M: MessagePayload> ServiceHandle<M> {
             use hyparview::message::{DisconnectMessage, ProtocolMessage};
 
             self.metrics.destination_unknown_messages.increment();
-            let missing = NodeId {
-                addr: self.server_addr,
-                local_id: id.clone(),
-            };
+            let missing = NodeId::new(self.server_addr, id.clone());
             let message = DisconnectMessage { sender: missing };
             let message = ProtocolMessage::Disconnect(message);
             let _ = self.send_message(sender.clone(), RpcMessage::Hyparview(message));

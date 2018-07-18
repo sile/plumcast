@@ -44,7 +44,7 @@ impl Decode for NodeIdDecoder {
     fn finish_decoding(&mut self) -> Result<Self::Item> {
         let addr = track!(self.addr.finish_decoding())?;
         let local_id = track!(self.local_id.finish_decoding())?;
-        Ok(NodeId { addr, local_id })
+        Ok(NodeId::new(addr, local_id))
     }
 
     fn requiring_bytes(&self) -> ByteCount {
@@ -101,8 +101,8 @@ impl Encode for NodeIdEncoder {
     }
 
     fn start_encoding(&mut self, item: Self::Item) -> Result<()> {
-        track!(self.addr.start_encoding(item.addr))?;
-        track!(self.local_id.start_encoding(item.local_id))?;
+        track!(self.addr.start_encoding(item.address()))?;
+        track!(self.local_id.start_encoding(item.local_id()))?;
         Ok(())
     }
 

@@ -44,7 +44,7 @@ pub fn join_cast(
     let mut client = JoinCast::client(&service);
     client.options_mut().force_wakeup = true;
     client.options_mut().priority = 100;
-    track!(client.cast(peer.addr, (peer.local_id, m)))?;
+    track!(client.cast(peer.address(), (peer.local_id(), m)))?;
     Ok(())
 }
 
@@ -79,7 +79,7 @@ pub fn forward_join_cast(
     let mut client = ForwardJoinCast::client(&service);
     client.options_mut().force_wakeup = true;
     client.options_mut().priority = 100;
-    track!(client.cast(peer.addr, (peer.local_id, m)))?;
+    track!(client.cast(peer.address(), (peer.local_id(), m)))?;
     Ok(())
 }
 
@@ -116,7 +116,7 @@ pub fn neighbor_cast(
         client.options_mut().force_wakeup = true;
         client.options_mut().priority = 100;
     }
-    track!(client.cast(peer.addr, (peer.local_id, m)))?;
+    track!(client.cast(peer.address(), (peer.local_id(), m)))?;
     Ok(())
 }
 
@@ -150,7 +150,7 @@ pub fn shuffle_cast(
 ) -> Result<()> {
     let mut client = ShuffleCast::client(&service);
     client.options_mut().priority = 200;
-    track!(client.cast(peer.addr, (peer.local_id, m)))?;
+    track!(client.cast(peer.address(), (peer.local_id(), m)))?;
     Ok(())
 }
 
@@ -184,7 +184,7 @@ pub fn shuffle_reply_cast(
 ) -> Result<()> {
     let mut client = ShuffleReplyCast::client(&service);
     client.options_mut().priority = 200;
-    track!(client.cast(peer.addr, (peer.local_id, m)))?;
+    track!(client.cast(peer.address(), (peer.local_id(), m)))?;
     Ok(())
 }
 
@@ -217,7 +217,7 @@ pub fn disconnect_cast(
     service: &ClientServiceHandle,
 ) -> Result<()> {
     let client = DisconnectCast::client(&service);
-    track!(client.cast(peer.addr, (peer.local_id, m)))?;
+    track!(client.cast(peer.address(), (peer.local_id(), m)))?;
     Ok(())
 }
 

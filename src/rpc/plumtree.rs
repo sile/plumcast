@@ -41,7 +41,7 @@ pub fn gossip_cast<M: MessagePayload>(
 ) -> Result<()> {
     let mut client = GossipCast::client(&service);
     client.options_mut().max_queue_len = Some(MAX_QUEUE_LEN);
-    track!(client.cast(peer.addr, (peer.local_id, m)))?;
+    track!(client.cast(peer.address(), (peer.local_id(), m)))?;
     Ok(())
 }
 
@@ -77,7 +77,7 @@ pub fn ihave_cast<M: MessagePayload>(
     let mut client = IhaveCast::client(&service);
     client.options_mut().priority = 200;
     client.options_mut().max_queue_len = Some(MAX_QUEUE_LEN);
-    track!(client.cast(peer.addr, (peer.local_id, m)))?;
+    track!(client.cast(peer.address(), (peer.local_id(), m)))?;
     Ok(())
 }
 
@@ -111,7 +111,7 @@ pub fn graft_cast<M: MessagePayload>(
     service: &ClientServiceHandle,
 ) -> Result<()> {
     let client = GraftCast::client(&service);
-    track!(client.cast(peer.addr, (peer.local_id, m)))?;
+    track!(client.cast(peer.address(), (peer.local_id(), m)))?;
     Ok(())
 }
 
@@ -145,7 +145,7 @@ pub fn prune_cast<M: MessagePayload>(
     service: &ClientServiceHandle,
 ) -> Result<()> {
     let client = PruneCast::client(&service);
-    track!(client.cast(peer.addr, (peer.local_id, m)))?;
+    track!(client.cast(peer.address(), (peer.local_id(), m)))?;
     Ok(())
 }
 
