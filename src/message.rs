@@ -1,4 +1,4 @@
-use bytecodec::bytes::{BytesEncoder, RemainingBytesDecoder};
+use bytecodec::bytes::{BytesEncoder, RemainingBytesDecoder, Utf8Decoder, Utf8Encoder};
 use bytecodec::{Decode, Encode};
 use plumtree::message::Message as InnerMessage;
 
@@ -34,11 +34,20 @@ impl<T: MessagePayload> Message<T> {
     }
 }
 
-/// The identifier of a message.
+/// Message identifier.
 ///
-/// TODO: doc of node part and seqno part
-/// TODO: doc of generation rule (only generated crate internally)
-/// TODO: doc; uniquness grantee of identifiers
+/// An identifier consists of the node identifier part and the sequence number part.
+/// The node identifier part which type is [`NodeId`] indicates the sender (origin) of the message.
+/// The sequence number part indicates the number of messages broadcasted by the sender so far.
+///
+/// Identifiers are assigned automatically when broadcasting messages.
+///
+/// It is guaranteed that the identifiers are unique in a cluster
+/// unless the OS processes executing plumcast nodes are restarted.
+/// Practically confliction of identifiers is extremely rare
+/// even if OS processes are frequently restarted.
+///
+/// [`NodeId`]: ./struct.NodeId.html
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub struct MessageId {
     node: NodeId,
@@ -75,4 +84,8 @@ pub trait MessagePayload: Sized + Clone + Send + 'static {
 impl MessagePayload for Vec<u8> {
     type Encoder = BytesEncoder<Vec<u8>>;
     type Decoder = RemainingBytesDecoder;
+}
+impl MessagePayload for String {
+    type Encoder = Utf8Encoder;
+    type Decoder = Utf8Decoder;
 }
