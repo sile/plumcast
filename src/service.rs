@@ -8,6 +8,7 @@ use fibers_rpc::client::{
 use fibers_rpc::server::{Server as RpcServer, ServerBuilder as RpcServerBuilder};
 use futures::{Async, Future, Poll, Stream};
 use prometrics::metrics::MetricBuilder;
+use rand::{self, Rng};
 use slog::{Discard, Logger};
 use std::collections::HashMap;
 use std::net::SocketAddr;
@@ -31,6 +32,7 @@ pub struct ServiceBuilder {
     rpc_server_builder: RpcServerBuilder,
     rpc_client_service_builder: RpcClientServiceBuilder,
     metrics: MetricBuilder,
+    local_node_id_start: u64,
 }
 impl ServiceBuilder {
     /// Makes a new `ServiceBuilder` instance with the default settings.
@@ -41,6 +43,7 @@ impl ServiceBuilder {
             rpc_server_builder: RpcServerBuilder::new(rpc_server_bind_addr),
             rpc_client_service_builder: RpcClientServiceBuilder::new(),
             metrics: MetricBuilder::new(),
+            local_node_id_start: rand::thread_rng().gen(),
         }
     }
 
@@ -62,6 +65,16 @@ impl ServiceBuilder {
         self
     }
 
+    /// Sets the value of the identifier of the first local node associated with the service.
+    ///
+    /// Local node identifiers are increased incrementally start from the specified value.
+    ///
+    /// The default value is `rand::thread_rng().gen()`.
+    pub fn local_node_id_start(mut self, n: u64) -> Self {
+        self.local_node_id_start = n;
+        self
+    }
+
     /// Builds a [`Service`] with the given settings.
     ///
     /// [`Service`]: ./struct.Service.html
@@ -79,7 +92,7 @@ impl ServiceBuilder {
             command_tx: command_tx.clone(),
             rpc_service: rpc_client_service.handle(),
             local_nodes: Default::default(),
-            next_local_id: Arc::new(AtomicUsize::new(0)),
+            next_local_id: Arc::new(AtomicUsize::new(self.local_node_id_start as usize)),
             metrics: metrics.clone(),
         };
 

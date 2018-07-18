@@ -49,6 +49,7 @@ fn main() -> Result<(), MainError> {
     let executor = track_any_err!(ThreadPoolExecutor::new())?;
     let service = ServiceBuilder::new(addr)
         .logger(logger.clone())
+        .local_node_id_start(0)
         .finish(executor.handle());
 
     let mut node = Node::new(logger, service.handle());
