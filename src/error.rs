@@ -30,6 +30,11 @@ pub enum ErrorKind {
     /// Input is invalid.
     InvalidInput,
 
+    /// Inconsistent state.
+    ///
+    /// There are probably bugs in the program.
+    InconsistentState,
+
     /// Other errors.
     Other,
 }
