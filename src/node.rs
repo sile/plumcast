@@ -1,51 +1,23 @@
 use fibers::sync::mpsc;
 use fibers::time::timer::{self, Timeout};
 use futures::{Async, Future, Poll, Stream};
-use hyparview::{self, Action as HyparviewAction, Node as HyparviewNode};
 use plumtree::message::Message as PlumtreeAppMessage;
-use plumtree::{self, Action as PlumtreeAction, Node as PlumtreeNode};
-use rand::{self, Rng, SeedableRng, StdRng};
 use slog::Logger;
 use std::collections::VecDeque;
 use std::fmt;
-use std::marker::PhantomData;
 use std::time::Duration;
 
+use hyparview_misc::{new_hyparview_node, HyparviewAction, HyparviewNode};
+use plumtree_misc::{PlumtreeAction, PlumtreeNode};
 use rpc::RpcMessage;
 use {Error, ErrorKind, LocalNodeId, Message, MessageId, MessagePayload, NodeId, ServiceHandle};
-
-#[derive(Clone)]
-pub struct NodeHandle<M: MessagePayload> {
-    local_id: LocalNodeId,
-    message_tx: mpsc::Sender<RpcMessage<M>>,
-}
-impl<M: MessagePayload> fmt::Debug for NodeHandle<M> {
-    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        write!(f, "NodeHandle {{ local_id: {:?}, .. }}", self.local_id)
-    }
-}
-impl<M: MessagePayload> NodeHandle<M> {
-    pub fn local_id(&self) -> LocalNodeId {
-        self.local_id
-    }
-
-    pub fn send_rpc_message(&self, message: RpcMessage<M>) {
-        let _ = self.message_tx.send(message);
-    }
-}
-
-#[derive(Debug)]
-pub struct System<M>(PhantomData<M>);
-impl<M: MessagePayload> plumtree::System for System<M> {
-    type NodeId = NodeId;
-    type MessageId = MessageId;
-    type MessagePayload = M;
-}
 
 const TICK_MS: u64 = 1000; // TODO
 const HYPARVIEW_SHUFFLE_INTERVAL_TICKS: usize = 59;
 const HYPARVIEW_SYNC_INTERVAL_TICKS: usize = 31;
 const HYPARVIEW_FILL_INTERVAL_TICKS: usize = 20;
+
+// TODO: NodeBuilder
 
 pub struct Node<M: MessagePayload> {
     logger: Logger,
@@ -53,8 +25,8 @@ pub struct Node<M: MessagePayload> {
     local_id: LocalNodeId, // TODO: remove
     service: ServiceHandle<M>,
     message_rx: mpsc::Receiver<RpcMessage<M>>,
-    hyparview_node: HyparviewNode<NodeId, StdRng>,
-    plumtree_node: PlumtreeNode<System<M>>,
+    hyparview_node: HyparviewNode,
+    plumtree_node: PlumtreeNode<M>,
     message_seqno: u64,
     deliverable_messages: VecDeque<Message<M>>,
     tick: Timeout, // TODO: tick_timeout
@@ -75,17 +47,13 @@ impl<M: MessagePayload> Node<M> {
             message_tx,
         };
         service.register_local_node(handle);
-        let rng = StdRng::from_seed(rand::thread_rng().gen());
         Node {
             logger,
             id: id.clone(),
             local_id: id.local_id(),
             service,
             message_rx,
-            hyparview_node: HyparviewNode::with_options(
-                id.clone(),
-                hyparview::NodeOptions::new().set_rng(rng),
-            ),
+            hyparview_node: new_hyparview_node(id.clone()),
             plumtree_node: PlumtreeNode::new(id.clone()),
             message_seqno: 0, // TODO: random (or make initial node id random)
             deliverable_messages: VecDeque::new(),
@@ -118,9 +86,19 @@ impl<M: MessagePayload> Node<M> {
         self.plumtree_node.forget_message(message_id);
     }
 
-    fn handle_hyparview_action(&mut self, action: HyparviewAction<NodeId>) {
+    pub fn hyparview_node(&self) -> &HyparviewNode {
+        &self.hyparview_node
+    }
+
+    pub fn plumtree_node(&self) -> &PlumtreeNode<M> {
+        &self.plumtree_node
+    }
+
+    fn handle_hyparview_action(&mut self, action: HyparviewAction) {
+        use hyparview::Action;
+
         match action {
-            HyparviewAction::Send {
+            Action::Send {
                 destination,
                 message,
             } => {
@@ -137,7 +115,7 @@ impl<M: MessagePayload> Node<M> {
                     //}
                 }
             }
-            HyparviewAction::Notify { event } => {
+            Action::Notify { event } => {
                 use hyparview::Event;
                 match event {
                     Event::NeighborDown { node } => {
@@ -150,15 +128,17 @@ impl<M: MessagePayload> Node<M> {
                     }
                 }
             }
-            HyparviewAction::Disconnect { node } => {
+            Action::Disconnect { node } => {
                 info!(self.logger, "Disconnected: {:?}", node);
             }
         }
     }
 
-    fn handle_plumtree_action(&mut self, action: PlumtreeAction<System<M>>) {
+    fn handle_plumtree_action(&mut self, action: PlumtreeAction<M>) {
+        use plumtree::Action;
+
         match action {
-            PlumtreeAction::Send {
+            Action::Send {
                 destination,
                 message,
             } => {
@@ -176,7 +156,7 @@ impl<M: MessagePayload> Node<M> {
                     self.hyparview_node.disconnect(&destination);
                 }
             }
-            PlumtreeAction::Deliver { message } => {
+            Action::Deliver { message } => {
                 debug!(
                     self.logger,
                     "[ACTION] Delivers an application message: {:?}", message.id
@@ -201,11 +181,13 @@ impl<M: MessagePayload> Node<M> {
     }
 
     fn leave(&self) {
+        use hyparview::message::{DisconnectMessage, ProtocolMessage};
+
         for peer in self.hyparview_node.active_view().iter().cloned() {
-            let message = hyparview::message::DisconnectMessage {
+            let message = DisconnectMessage {
                 sender: self.id.clone(),
             };
-            let message = hyparview::message::ProtocolMessage::Disconnect(message);
+            let message = ProtocolMessage::Disconnect(message);
             let message = RpcMessage::Hyparview(message);
             let _ = self.service.send_message(peer, message);
         }
@@ -262,5 +244,25 @@ impl<M: MessagePayload> Drop for Node<M> {
     fn drop(&mut self) {
         self.service.deregister_local_node(self.local_id);
         self.leave();
+    }
+}
+
+#[derive(Clone)]
+pub struct NodeHandle<M: MessagePayload> {
+    local_id: LocalNodeId,
+    message_tx: mpsc::Sender<RpcMessage<M>>,
+}
+impl<M: MessagePayload> fmt::Debug for NodeHandle<M> {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        write!(f, "NodeHandle {{ local_id: {:?}, .. }}", self.local_id)
+    }
+}
+impl<M: MessagePayload> NodeHandle<M> {
+    pub fn local_id(&self) -> LocalNodeId {
+        self.local_id
+    }
+
+    pub fn send_rpc_message(&self, message: RpcMessage<M>) {
+        let _ = self.message_tx.send(message);
     }
 }

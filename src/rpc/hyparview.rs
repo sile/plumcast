@@ -1,10 +1,6 @@
 use fibers_rpc::client::ClientServiceHandle;
 use fibers_rpc::server::{HandleCast, NoReply, ServerBuilder};
 use fibers_rpc::{Cast, ProcedureId};
-use hyparview::message::{
-    DisconnectMessage, ForwardJoinMessage, JoinMessage, NeighborMessage, ProtocolMessage,
-    ShuffleMessage, ShuffleReplyMessage,
-};
 
 use super::RpcMessage;
 use codec::hyparview::{
@@ -12,6 +8,10 @@ use codec::hyparview::{
     ForwardJoinMessageEncoder, JoinMessageDecoder, JoinMessageEncoder, NeighborMessageDecoder,
     NeighborMessageEncoder, ShuffleMessageDecoder, ShuffleMessageEncoder,
     ShuffleReplyMessageDecoder, ShuffleReplyMessageEncoder,
+};
+use hyparview_misc::{
+    DisconnectMessage, ForwardJoinMessage, JoinMessage, NeighborMessage, ShuffleMessage,
+    ShuffleReplyMessage,
 };
 use service::ServiceHandle;
 use {LocalNodeId, MessagePayload, NodeId, Result};
@@ -31,16 +31,12 @@ impl Cast for JoinCast {
     const ID: ProcedureId = ProcedureId(0x17CC_0000);
     const NAME: &'static str = "hyparview.join";
 
-    type Notification = (LocalNodeId, JoinMessage<NodeId>);
+    type Notification = (LocalNodeId, JoinMessage);
     type Decoder = JoinMessageDecoder;
     type Encoder = JoinMessageEncoder;
 }
 
-pub fn join_cast(
-    peer: NodeId,
-    m: JoinMessage<NodeId>,
-    service: &ClientServiceHandle,
-) -> Result<()> {
+pub fn join_cast(peer: NodeId, m: JoinMessage, service: &ClientServiceHandle) -> Result<()> {
     let mut client = JoinCast::client(&service);
     client.options_mut().force_wakeup = true;
     client.options_mut().priority = 100;
@@ -51,10 +47,9 @@ pub fn join_cast(
 #[derive(Debug)]
 struct JoinHandler<M: MessagePayload>(ServiceHandle<M>);
 impl<M: MessagePayload> HandleCast<JoinCast> for JoinHandler<M> {
-    fn handle_cast(&self, (id, m): (LocalNodeId, JoinMessage<NodeId>)) -> NoReply {
+    fn handle_cast(&self, (id, m): (LocalNodeId, JoinMessage)) -> NoReply {
         if let Some(node) = self.0.get_local_node_or_disconnect(&id, &m.sender) {
-            let m = RpcMessage::Hyparview(ProtocolMessage::Join(m));
-            node.send_rpc_message(m);
+            node.send_rpc_message(RpcMessage::Hyparview(m.into()));
         }
         NoReply::done()
     }
@@ -66,14 +61,14 @@ impl Cast for ForwardJoinCast {
     const ID: ProcedureId = ProcedureId(0x17CC_0001);
     const NAME: &'static str = "hyparview.forward_join";
 
-    type Notification = (LocalNodeId, ForwardJoinMessage<NodeId>);
+    type Notification = (LocalNodeId, ForwardJoinMessage);
     type Decoder = ForwardJoinMessageDecoder;
     type Encoder = ForwardJoinMessageEncoder;
 }
 
 pub fn forward_join_cast(
     peer: NodeId,
-    m: ForwardJoinMessage<NodeId>,
+    m: ForwardJoinMessage,
     service: &ClientServiceHandle,
 ) -> Result<()> {
     let mut client = ForwardJoinCast::client(&service);
@@ -86,10 +81,9 @@ pub fn forward_join_cast(
 #[derive(Debug)]
 struct ForwardJoinHandler<M: MessagePayload>(ServiceHandle<M>);
 impl<M: MessagePayload> HandleCast<ForwardJoinCast> for ForwardJoinHandler<M> {
-    fn handle_cast(&self, (id, m): (LocalNodeId, ForwardJoinMessage<NodeId>)) -> NoReply {
+    fn handle_cast(&self, (id, m): (LocalNodeId, ForwardJoinMessage)) -> NoReply {
         if let Some(node) = self.0.get_local_node_or_disconnect(&id, &m.sender) {
-            let m = RpcMessage::Hyparview(ProtocolMessage::ForwardJoin(m));
-            node.send_rpc_message(m);
+            node.send_rpc_message(RpcMessage::Hyparview(m.into()));
         }
         NoReply::done()
     }
@@ -101,14 +95,14 @@ impl Cast for NeighborCast {
     const ID: ProcedureId = ProcedureId(0x17CC_0002);
     const NAME: &'static str = "hyparview.neighbor";
 
-    type Notification = (LocalNodeId, NeighborMessage<NodeId>);
+    type Notification = (LocalNodeId, NeighborMessage);
     type Decoder = NeighborMessageDecoder;
     type Encoder = NeighborMessageEncoder;
 }
 
 pub fn neighbor_cast(
     peer: NodeId,
-    m: NeighborMessage<NodeId>,
+    m: NeighborMessage,
     service: &ClientServiceHandle,
 ) -> Result<()> {
     let mut client = NeighborCast::client(&service);
@@ -123,10 +117,9 @@ pub fn neighbor_cast(
 #[derive(Debug)]
 struct NeighborHandler<M: MessagePayload>(ServiceHandle<M>);
 impl<M: MessagePayload> HandleCast<NeighborCast> for NeighborHandler<M> {
-    fn handle_cast(&self, (id, m): (LocalNodeId, NeighborMessage<NodeId>)) -> NoReply {
+    fn handle_cast(&self, (id, m): (LocalNodeId, NeighborMessage)) -> NoReply {
         if let Some(node) = self.0.get_local_node_or_disconnect(&id, &m.sender) {
-            let m = RpcMessage::Hyparview(ProtocolMessage::Neighbor(m));
-            node.send_rpc_message(m);
+            node.send_rpc_message(RpcMessage::Hyparview(m.into()));
         }
         NoReply::done()
     }
@@ -138,16 +131,12 @@ impl Cast for ShuffleCast {
     const ID: ProcedureId = ProcedureId(0x17CC_0003);
     const NAME: &'static str = "hyparview.shuffle";
 
-    type Notification = (LocalNodeId, ShuffleMessage<NodeId>);
+    type Notification = (LocalNodeId, ShuffleMessage);
     type Decoder = ShuffleMessageDecoder;
     type Encoder = ShuffleMessageEncoder;
 }
 
-pub fn shuffle_cast(
-    peer: NodeId,
-    m: ShuffleMessage<NodeId>,
-    service: &ClientServiceHandle,
-) -> Result<()> {
+pub fn shuffle_cast(peer: NodeId, m: ShuffleMessage, service: &ClientServiceHandle) -> Result<()> {
     let mut client = ShuffleCast::client(&service);
     client.options_mut().priority = 200;
     track!(client.cast(peer.address(), (peer.local_id(), m)))?;
@@ -157,10 +146,9 @@ pub fn shuffle_cast(
 #[derive(Debug)]
 struct ShuffleHandler<M: MessagePayload>(ServiceHandle<M>);
 impl<M: MessagePayload> HandleCast<ShuffleCast> for ShuffleHandler<M> {
-    fn handle_cast(&self, (id, m): (LocalNodeId, ShuffleMessage<NodeId>)) -> NoReply {
+    fn handle_cast(&self, (id, m): (LocalNodeId, ShuffleMessage)) -> NoReply {
         if let Some(node) = self.0.get_local_node_or_disconnect(&id, &m.sender) {
-            let m = RpcMessage::Hyparview(ProtocolMessage::Shuffle(m));
-            node.send_rpc_message(m);
+            node.send_rpc_message(RpcMessage::Hyparview(m.into()));
         }
         NoReply::done()
     }
@@ -172,14 +160,14 @@ impl Cast for ShuffleReplyCast {
     const ID: ProcedureId = ProcedureId(0x17CC_0004);
     const NAME: &'static str = "hyparview.shuffle_reply";
 
-    type Notification = (LocalNodeId, ShuffleReplyMessage<NodeId>);
+    type Notification = (LocalNodeId, ShuffleReplyMessage);
     type Decoder = ShuffleReplyMessageDecoder;
     type Encoder = ShuffleReplyMessageEncoder;
 }
 
 pub fn shuffle_reply_cast(
     peer: NodeId,
-    m: ShuffleReplyMessage<NodeId>,
+    m: ShuffleReplyMessage,
     service: &ClientServiceHandle,
 ) -> Result<()> {
     let mut client = ShuffleReplyCast::client(&service);
@@ -191,10 +179,9 @@ pub fn shuffle_reply_cast(
 #[derive(Debug)]
 struct ShuffleReplyHandler<M: MessagePayload>(ServiceHandle<M>);
 impl<M: MessagePayload> HandleCast<ShuffleReplyCast> for ShuffleReplyHandler<M> {
-    fn handle_cast(&self, (id, m): (LocalNodeId, ShuffleReplyMessage<NodeId>)) -> NoReply {
+    fn handle_cast(&self, (id, m): (LocalNodeId, ShuffleReplyMessage)) -> NoReply {
         if let Some(node) = self.0.get_local_node_or_disconnect(&id, &m.sender) {
-            let m = RpcMessage::Hyparview(ProtocolMessage::ShuffleReply(m));
-            node.send_rpc_message(m);
+            node.send_rpc_message(RpcMessage::Hyparview(m.into()));
         }
         NoReply::done()
     }
@@ -206,14 +193,14 @@ impl Cast for DisconnectCast {
     const ID: ProcedureId = ProcedureId(0x17CC_0005);
     const NAME: &'static str = "hyparview.disconnect";
 
-    type Notification = (LocalNodeId, DisconnectMessage<NodeId>);
+    type Notification = (LocalNodeId, DisconnectMessage);
     type Decoder = DisconnectMessageDecoder;
     type Encoder = DisconnectMessageEncoder;
 }
 
 pub fn disconnect_cast(
     peer: NodeId,
-    m: DisconnectMessage<NodeId>,
+    m: DisconnectMessage,
     service: &ClientServiceHandle,
 ) -> Result<()> {
     let client = DisconnectCast::client(&service);
@@ -224,10 +211,9 @@ pub fn disconnect_cast(
 #[derive(Debug)]
 struct DisconnectHandler<M: MessagePayload>(ServiceHandle<M>);
 impl<M: MessagePayload> HandleCast<DisconnectCast> for DisconnectHandler<M> {
-    fn handle_cast(&self, (id, m): (LocalNodeId, DisconnectMessage<NodeId>)) -> NoReply {
+    fn handle_cast(&self, (id, m): (LocalNodeId, DisconnectMessage)) -> NoReply {
         if let Some(node) = self.0.get_local_node(&id) {
-            let m = RpcMessage::Hyparview(ProtocolMessage::Disconnect(m));
-            node.send_rpc_message(m);
+            node.send_rpc_message(RpcMessage::Hyparview(m.into()));
         }
         NoReply::done()
     }

@@ -1,14 +1,14 @@
 use bytecodec::combinator::{Collect, Repeat};
 use bytecodec::fixnum::{U8Decoder, U8Encoder};
 use bytecodec::{ByteCount, Decode, Encode, Eos, Result, SizedEncode};
-use hyparview::message::{
-    DisconnectMessage, ForwardJoinMessage, JoinMessage, NeighborMessage, ShuffleMessage,
-    ShuffleReplyMessage,
-};
 use hyparview::TimeToLive;
 use std;
 
 use super::node::{LocalNodeIdDecoder, LocalNodeIdEncoder, NodeIdDecoder, NodeIdEncoder};
+use hyparview_misc::{
+    DisconnectMessage, ForwardJoinMessage, JoinMessage, NeighborMessage, ShuffleMessage,
+    ShuffleReplyMessage,
+};
 use {LocalNodeId, NodeId};
 
 #[derive(Debug, Default)]
@@ -17,7 +17,7 @@ pub struct JoinMessageDecoder {
     sender: NodeIdDecoder,
 }
 impl Decode for JoinMessageDecoder {
-    type Item = (LocalNodeId, JoinMessage<NodeId>);
+    type Item = (LocalNodeId, JoinMessage);
 
     fn decode(&mut self, buf: &[u8], eos: Eos) -> Result<usize> {
         let mut offset = 0;
@@ -49,7 +49,7 @@ pub struct JoinMessageEncoder {
     sender: NodeIdEncoder,
 }
 impl Encode for JoinMessageEncoder {
-    type Item = (LocalNodeId, JoinMessage<NodeId>);
+    type Item = (LocalNodeId, JoinMessage);
 
     fn encode(&mut self, buf: &mut [u8], eos: Eos) -> Result<usize> {
         let mut offset = 0;
@@ -86,7 +86,7 @@ pub struct ForwardJoinMessageDecoder {
     ttl: U8Decoder,
 }
 impl Decode for ForwardJoinMessageDecoder {
-    type Item = (LocalNodeId, ForwardJoinMessage<NodeId>);
+    type Item = (LocalNodeId, ForwardJoinMessage);
 
     fn decode(&mut self, buf: &[u8], eos: Eos) -> Result<usize> {
         let mut offset = 0;
@@ -131,7 +131,7 @@ pub struct ForwardJoinMessageEncoder {
     ttl: U8Encoder,
 }
 impl Encode for ForwardJoinMessageEncoder {
-    type Item = (LocalNodeId, ForwardJoinMessage<NodeId>);
+    type Item = (LocalNodeId, ForwardJoinMessage);
 
     fn encode(&mut self, buf: &mut [u8], eos: Eos) -> Result<usize> {
         let mut offset = 0;
@@ -174,7 +174,7 @@ pub struct NeighborMessageDecoder {
     high_priority: U8Decoder,
 }
 impl Decode for NeighborMessageDecoder {
-    type Item = (LocalNodeId, NeighborMessage<NodeId>);
+    type Item = (LocalNodeId, NeighborMessage);
 
     fn decode(&mut self, buf: &[u8], eos: Eos) -> Result<usize> {
         let mut offset = 0;
@@ -214,7 +214,7 @@ pub struct NeighborMessageEncoder {
     high_priority: U8Encoder,
 }
 impl Encode for NeighborMessageEncoder {
-    type Item = (LocalNodeId, NeighborMessage<NodeId>);
+    type Item = (LocalNodeId, NeighborMessage);
 
     fn encode(&mut self, buf: &mut [u8], eos: Eos) -> Result<usize> {
         let mut offset = 0;
@@ -259,7 +259,7 @@ pub struct ShuffleMessageDecoder {
     nodes: Collect<NodeIdDecoder, Vec<NodeId>>,
 }
 impl Decode for ShuffleMessageDecoder {
-    type Item = (LocalNodeId, ShuffleMessage<NodeId>);
+    type Item = (LocalNodeId, ShuffleMessage);
 
     fn decode(&mut self, buf: &[u8], eos: Eos) -> Result<usize> {
         let mut offset = 0;
@@ -310,7 +310,7 @@ pub struct ShuffleMessageEncoder {
     nodes: Repeat<NodeIdEncoder, std::vec::IntoIter<NodeId>>,
 }
 impl Encode for ShuffleMessageEncoder {
-    type Item = (LocalNodeId, ShuffleMessage<NodeId>);
+    type Item = (LocalNodeId, ShuffleMessage);
 
     fn encode(&mut self, buf: &mut [u8], eos: Eos) -> Result<usize> {
         let mut offset = 0;
@@ -352,7 +352,7 @@ pub struct ShuffleReplyMessageDecoder {
     nodes: Collect<NodeIdDecoder, Vec<NodeId>>,
 }
 impl Decode for ShuffleReplyMessageDecoder {
-    type Item = (LocalNodeId, ShuffleReplyMessage<NodeId>);
+    type Item = (LocalNodeId, ShuffleReplyMessage);
 
     fn decode(&mut self, buf: &[u8], eos: Eos) -> Result<usize> {
         let mut offset = 0;
@@ -390,7 +390,7 @@ pub struct ShuffleReplyMessageEncoder {
     nodes: Repeat<NodeIdEncoder, std::vec::IntoIter<NodeId>>,
 }
 impl Encode for ShuffleReplyMessageEncoder {
-    type Item = (LocalNodeId, ShuffleReplyMessage<NodeId>);
+    type Item = (LocalNodeId, ShuffleReplyMessage);
 
     fn encode(&mut self, buf: &mut [u8], eos: Eos) -> Result<usize> {
         let mut offset = 0;
@@ -425,7 +425,7 @@ pub struct DisconnectMessageDecoder {
     sender: NodeIdDecoder,
 }
 impl Decode for DisconnectMessageDecoder {
-    type Item = (LocalNodeId, DisconnectMessage<NodeId>);
+    type Item = (LocalNodeId, DisconnectMessage);
 
     fn decode(&mut self, buf: &[u8], eos: Eos) -> Result<usize> {
         let mut offset = 0;
@@ -457,7 +457,7 @@ pub struct DisconnectMessageEncoder {
     sender: NodeIdEncoder,
 }
 impl Encode for DisconnectMessageEncoder {
-    type Item = (LocalNodeId, DisconnectMessage<NodeId>);
+    type Item = (LocalNodeId, DisconnectMessage);
 
     fn encode(&mut self, buf: &mut [u8], eos: Eos) -> Result<usize> {
         let mut offset = 0;

@@ -1,13 +1,12 @@
 use bytecodec::bytes::{BytesEncoder, RemainingBytesDecoder, Utf8Decoder, Utf8Encoder};
 use bytecodec::{Decode, Encode};
-use plumtree::message::Message as InnerMessage;
 
-use node::System;
+use plumtree_misc::Message as InnerMessage;
 use NodeId;
 
 /// Broadcasted application message.
 #[derive(Debug, Clone)]
-pub struct Message<T: MessagePayload>(InnerMessage<System<T>>);
+pub struct Message<T: MessagePayload>(InnerMessage<T>);
 impl<T: MessagePayload> Message<T> {
     /// Returns a reference to the identifier of the message.
     pub fn id(&self) -> &MessageId {
@@ -29,8 +28,8 @@ impl<T: MessagePayload> Message<T> {
         self.0.payload
     }
 
-    pub(crate) fn new(m: InnerMessage<System<T>>) -> Self {
-        Message(m)
+    pub(crate) fn new(message: InnerMessage<T>) -> Self {
+        Message(message)
     }
 }
 

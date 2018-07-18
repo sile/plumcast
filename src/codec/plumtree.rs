@@ -5,12 +5,11 @@ use bytecodec::fixnum::{
     U8Encoder,
 };
 use bytecodec::{ByteCount, Decode, Encode, Eos, Result, SizedEncode};
-use plumtree::message::{GossipMessage, GraftMessage, IhaveMessage, Message, PruneMessage};
 use std::fmt;
 use std::marker::PhantomData;
 
 use super::node::{LocalNodeIdDecoder, LocalNodeIdEncoder, NodeIdDecoder, NodeIdEncoder};
-use node::System;
+use plumtree_misc::{GossipMessage, GraftMessage, IhaveMessage, Message, PruneMessage};
 use {LocalNodeId, MessageId, MessagePayload};
 
 pub struct GossipMessageDecoder<M: MessagePayload> {
@@ -43,7 +42,7 @@ where
     }
 }
 impl<M: MessagePayload> Decode for GossipMessageDecoder<M> {
-    type Item = (LocalNodeId, GossipMessage<System<M>>);
+    type Item = (LocalNodeId, GossipMessage<M>);
 
     fn decode(&mut self, buf: &[u8], eos: Eos) -> Result<usize> {
         let mut offset = 0;
@@ -105,7 +104,7 @@ where
     }
 }
 impl<M: MessagePayload> Decode for MessageDecoder<M> {
-    type Item = Message<System<M>>;
+    type Item = Message<M>;
 
     fn decode(&mut self, buf: &[u8], eos: Eos) -> Result<usize> {
         let mut offset = 0;
@@ -231,7 +230,7 @@ where
     }
 }
 impl<M: MessagePayload> Encode for GossipMessageEncoder<M> {
-    type Item = (LocalNodeId, GossipMessage<System<M>>);
+    type Item = (LocalNodeId, GossipMessage<M>);
 
     fn encode(&mut self, buf: &mut [u8], eos: Eos) -> Result<usize> {
         let mut offset = 0;
@@ -299,7 +298,7 @@ where
     }
 }
 impl<M: MessagePayload> Encode for MessageEncoder<M> {
-    type Item = Message<System<M>>;
+    type Item = Message<M>;
 
     fn encode(&mut self, buf: &mut [u8], eos: Eos) -> Result<usize> {
         let mut offset = 0;
@@ -429,7 +428,7 @@ impl<M> Default for IhaveMessageDecoder<M> {
     }
 }
 impl<M: MessagePayload> Decode for IhaveMessageDecoder<M> {
-    type Item = (LocalNodeId, IhaveMessage<System<M>>);
+    type Item = (LocalNodeId, IhaveMessage<M>);
 
     fn decode(&mut self, buf: &[u8], eos: Eos) -> Result<usize> {
         let mut offset = 0;
@@ -493,7 +492,7 @@ impl<M> Default for IhaveMessageEncoder<M> {
     }
 }
 impl<M: MessagePayload> Encode for IhaveMessageEncoder<M> {
-    type Item = (LocalNodeId, IhaveMessage<System<M>>);
+    type Item = (LocalNodeId, IhaveMessage<M>);
 
     fn encode(&mut self, buf: &mut [u8], eos: Eos) -> Result<usize> {
         let mut offset = 0;
@@ -554,7 +553,7 @@ impl<M> Default for GraftMessageDecoder<M> {
     }
 }
 impl<M: MessagePayload> Decode for GraftMessageDecoder<M> {
-    type Item = (LocalNodeId, GraftMessage<System<M>>);
+    type Item = (LocalNodeId, GraftMessage<M>);
 
     fn decode(&mut self, buf: &[u8], eos: Eos) -> Result<usize> {
         let mut offset = 0;
@@ -631,7 +630,7 @@ impl<M> Default for GraftMessageEncoder<M> {
     }
 }
 impl<M: MessagePayload> Encode for GraftMessageEncoder<M> {
-    type Item = (LocalNodeId, GraftMessage<System<M>>);
+    type Item = (LocalNodeId, GraftMessage<M>);
 
     fn encode(&mut self, buf: &mut [u8], eos: Eos) -> Result<usize> {
         let mut offset = 0;
@@ -690,7 +689,7 @@ impl<M> Default for PruneMessageDecoder<M> {
     }
 }
 impl<M: MessagePayload> Decode for PruneMessageDecoder<M> {
-    type Item = (LocalNodeId, PruneMessage<System<M>>);
+    type Item = (LocalNodeId, PruneMessage<M>);
 
     fn decode(&mut self, buf: &[u8], eos: Eos) -> Result<usize> {
         let mut offset = 0;
@@ -734,7 +733,7 @@ impl<M> Default for PruneMessageEncoder<M> {
     }
 }
 impl<M: MessagePayload> Encode for PruneMessageEncoder<M> {
-    type Item = (LocalNodeId, PruneMessage<System<M>>);
+    type Item = (LocalNodeId, PruneMessage<M>);
 
     fn encode(&mut self, buf: &mut [u8], eos: Eos) -> Result<usize> {
         let mut offset = 0;
