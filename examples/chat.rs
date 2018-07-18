@@ -54,10 +54,7 @@ fn main() -> Result<(), MainError> {
     let mut node = Node::new(logger, service.handle());
     if let Some(contact) = matches.value_of("CONTACT_SERVER") {
         let contact: SocketAddr = track_any_err!(contact.parse())?;
-        node.join(NodeId {
-            addr: contact,
-            local_id: LocalNodeId::new(0),
-        });
+        node.join(NodeId::new(contact, LocalNodeId::new(0)));
     }
 
     let (message_tx, message_rx) = mpsc::channel();

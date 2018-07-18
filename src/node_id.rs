@@ -8,13 +8,14 @@ use std::net::SocketAddr;
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, PartialOrd, Ord)]
 pub struct LocalNodeId(u64);
 impl LocalNodeId {
+    /// Makes a new `LocalNodeId` instance.
+    pub fn new(id: u64) -> Self {
+        LocalNodeId(id)
+    }
+
     /// Returns the value of the identifier.
     pub fn value(&self) -> u64 {
         self.0
-    }
-
-    pub(crate) fn new(id: u64) -> Self {
-        LocalNodeId(id)
     }
 }
 
@@ -31,6 +32,11 @@ pub struct NodeId {
     local_id: LocalNodeId,
 }
 impl NodeId {
+    /// Makes a new `NodeId` instance.
+    pub fn new(address: SocketAddr, local_id: LocalNodeId) -> Self {
+        NodeId { address, local_id }
+    }
+
     /// Returns the RPC server address part of the identifier.
     pub fn address(&self) -> SocketAddr {
         self.address
@@ -39,9 +45,5 @@ impl NodeId {
     /// Returns the local node identifier part of the identifier.
     pub fn local_id(&self) -> LocalNodeId {
         self.local_id
-    }
-
-    pub(crate) fn new(address: SocketAddr, local_id: LocalNodeId) -> Self {
-        NodeId { address, local_id }
     }
 }
