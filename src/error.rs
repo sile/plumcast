@@ -13,8 +13,14 @@ impl From<std::sync::mpsc::RecvError> for Error {
 }
 impl From<fibers_rpc::Error> for Error {
     fn from(f: fibers_rpc::Error) -> Self {
-        // TODO
-        ErrorKind::Other.takes_over(f).into()
+        let kind = match f.kind() {
+            fibers_rpc::ErrorKind::InvalidInput => ErrorKind::InvalidInput,
+            fibers_rpc::ErrorKind::Timeout
+            | fibers_rpc::ErrorKind::Unavailable
+            | fibers_rpc::ErrorKind::Other => ErrorKind::Other,
+        };
+        let rpc_error_kind = *f.kind();
+        track!(kind.takes_over(f); rpc_error_kind).into()
     }
 }
 
