@@ -72,13 +72,8 @@ impl ServiceBuilder {
     {
         let (command_tx, command_rx) = mpsc::channel();
         let rpc_client_service = self.rpc_client_service_builder.finish(spawner.clone());
-        let rpc_server = self.rpc_server_builder.finish(spawner);
 
-        let metrics = ServiceMetrics::new(
-            self.metrics,
-            rpc_server.metrics().clone(),
-            rpc_client_service.handle().metrics().clone(),
-        );
+        let metrics = ServiceMetrics::new(self.metrics);
         let handle = ServiceHandle {
             server_addr: self.server_addr,
             command_tx: command_tx.clone(),
@@ -90,6 +85,7 @@ impl ServiceBuilder {
 
         rpc::hyparview::register_handlers(&mut self.rpc_server_builder, handle.clone());
         rpc::plumtree::register_handlers(&mut self.rpc_server_builder, handle.clone());
+        let rpc_server = self.rpc_server_builder.finish(spawner);
 
         Service {
             logger: self.logger.clone(),
@@ -208,6 +204,12 @@ where
             track!(self.handle_command(command))?;
         }
         Ok(Async::NotReady)
+    }
+}
+impl<S, M: MessagePayload> Drop for Service<S, M> {
+    fn drop(&mut self) {
+        let old = self.handle.local_nodes.swap(HashMap::new());
+        self.metrics.deregistered_nodes.add_u64(old.len() as u64);
     }
 }
 
