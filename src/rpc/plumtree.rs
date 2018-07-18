@@ -13,6 +13,8 @@ use node::System;
 use service::ServiceHandle;
 use {LocalNodeId, MessagePayload, NodeId, Result};
 
+const MAX_QUEUE_LEN: u64 = 4096; // FIXME: parameterize
+
 pub fn register_handlers<M: MessagePayload>(rpc: &mut ServerBuilder, service: ServiceHandle<M>) {
     rpc.add_cast_handler(GossipHandler(service.clone()));
     rpc.add_cast_handler(IhaveHandler(service.clone()));
@@ -38,7 +40,7 @@ pub fn gossip_cast<M: MessagePayload>(
     service: &ClientServiceHandle,
 ) -> Result<()> {
     let mut client = GossipCast::client(&service);
-    client.options_mut().max_queue_len = Some(4096); // TODO:
+    client.options_mut().max_queue_len = Some(MAX_QUEUE_LEN);
     track!(client.cast(peer.addr, (peer.local_id, m)))?;
     Ok(())
 }
@@ -74,7 +76,7 @@ pub fn ihave_cast<M: MessagePayload>(
 ) -> Result<()> {
     let mut client = IhaveCast::client(&service);
     client.options_mut().priority = 200;
-    client.options_mut().max_queue_len = Some(4096); // TODO: parameter
+    client.options_mut().max_queue_len = Some(MAX_QUEUE_LEN);
     track!(client.cast(peer.addr, (peer.local_id, m)))?;
     Ok(())
 }

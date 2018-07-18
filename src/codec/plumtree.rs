@@ -411,8 +411,8 @@ impl SizedEncode for MessagePayloadEncoder {
 pub struct IhaveMessageDecoder<M> {
     destination: LocalNodeIdDecoder,
     sender: NodeIdDecoder,
-    message_id: MessageIdDecoder,
     round: U16beDecoder,
+    message_id: MessageIdDecoder,
     realtime: U8Decoder,
     _phantom: PhantomData<M>,
 }
@@ -421,8 +421,8 @@ impl<M> Default for IhaveMessageDecoder<M> {
         IhaveMessageDecoder {
             destination: Default::default(),
             sender: Default::default(),
-            message_id: Default::default(),
             round: Default::default(),
+            message_id: Default::default(),
             realtime: Default::default(),
             _phantom: PhantomData,
         }
@@ -435,8 +435,8 @@ impl<M: MessagePayload> Decode for IhaveMessageDecoder<M> {
         let mut offset = 0;
         bytecodec_try_decode!(self.destination, offset, buf, eos);
         bytecodec_try_decode!(self.sender, offset, buf, eos);
-        bytecodec_try_decode!(self.message_id, offset, buf, eos);
         bytecodec_try_decode!(self.round, offset, buf, eos);
+        bytecodec_try_decode!(self.message_id, offset, buf, eos);
         bytecodec_try_decode!(self.realtime, offset, buf, eos);
         Ok(offset)
     }
@@ -444,17 +444,16 @@ impl<M: MessagePayload> Decode for IhaveMessageDecoder<M> {
     fn finish_decoding(&mut self) -> Result<Self::Item> {
         let destination = track!(self.destination.finish_decoding())?;
         let sender = track!(self.sender.finish_decoding())?;
-        let message_id = track!(self.message_id.finish_decoding())?;
         let round = track!(self.round.finish_decoding())?;
+        let message_id = track!(self.message_id.finish_decoding())?;
         let realtime = track!(self.realtime.finish_decoding())?;
 
         let message = IhaveMessage {
             sender,
-            message_id,
             round,
+            message_id,
             realtime: realtime != 0,
         };
-
         Ok((destination, message))
     }
 
@@ -462,8 +461,8 @@ impl<M: MessagePayload> Decode for IhaveMessageDecoder<M> {
         self.destination
             .requiring_bytes()
             .add_for_decoding(self.sender.requiring_bytes())
-            .add_for_decoding(self.message_id.requiring_bytes())
             .add_for_decoding(self.round.requiring_bytes())
+            .add_for_decoding(self.message_id.requiring_bytes())
             .add_for_decoding(self.realtime.requiring_bytes())
     }
 
@@ -476,8 +475,8 @@ impl<M: MessagePayload> Decode for IhaveMessageDecoder<M> {
 pub struct IhaveMessageEncoder<M> {
     destination: LocalNodeIdEncoder,
     sender: NodeIdEncoder,
-    message_id: MessageIdEncoder,
     round: U16beEncoder,
+    message_id: MessageIdEncoder,
     realtime: U8Encoder,
     _phantom: PhantomData<M>,
 }
@@ -486,8 +485,8 @@ impl<M> Default for IhaveMessageEncoder<M> {
         IhaveMessageEncoder {
             destination: Default::default(),
             sender: Default::default(),
-            message_id: Default::default(),
             round: Default::default(),
+            message_id: Default::default(),
             realtime: Default::default(),
             _phantom: PhantomData,
         }
@@ -500,8 +499,8 @@ impl<M: MessagePayload> Encode for IhaveMessageEncoder<M> {
         let mut offset = 0;
         bytecodec_try_encode!(self.destination, offset, buf, eos);
         bytecodec_try_encode!(self.sender, offset, buf, eos);
-        bytecodec_try_encode!(self.message_id, offset, buf, eos);
         bytecodec_try_encode!(self.round, offset, buf, eos);
+        bytecodec_try_encode!(self.message_id, offset, buf, eos);
         bytecodec_try_encode!(self.realtime, offset, buf, eos);
         Ok(offset)
     }
@@ -509,8 +508,8 @@ impl<M: MessagePayload> Encode for IhaveMessageEncoder<M> {
     fn start_encoding(&mut self, item: Self::Item) -> Result<()> {
         track!(self.destination.start_encoding(item.0))?;
         track!(self.sender.start_encoding(item.1.sender))?;
-        track!(self.message_id.start_encoding(item.1.message_id))?;
         track!(self.round.start_encoding(item.1.round))?;
+        track!(self.message_id.start_encoding(item.1.message_id))?;
         track!(self.realtime.start_encoding(item.1.realtime as u8))?;
         Ok(())
     }
@@ -527,8 +526,8 @@ impl<M: MessagePayload> SizedEncode for IhaveMessageEncoder<M> {
     fn exact_requiring_bytes(&self) -> u64 {
         self.destination.exact_requiring_bytes()
             + self.sender.exact_requiring_bytes()
-            + self.message_id.exact_requiring_bytes()
             + self.round.exact_requiring_bytes()
+            + self.message_id.exact_requiring_bytes()
             + self.realtime.exact_requiring_bytes()
     }
 }
@@ -537,9 +536,9 @@ impl<M: MessagePayload> SizedEncode for IhaveMessageEncoder<M> {
 pub struct GraftMessageDecoder<M> {
     destination: LocalNodeIdDecoder,
     sender: NodeIdDecoder,
+    round: U16beDecoder,
     has_message_id: Peekable<U8Decoder>,
     message_id: MessageIdDecoder,
-    round: U16beDecoder,
     _phantom: PhantomData<M>,
 }
 impl<M> Default for GraftMessageDecoder<M> {
@@ -547,9 +546,9 @@ impl<M> Default for GraftMessageDecoder<M> {
         GraftMessageDecoder {
             destination: Default::default(),
             sender: Default::default(),
+            round: Default::default(),
             has_message_id: Default::default(),
             message_id: Default::default(),
-            round: Default::default(),
             _phantom: PhantomData,
         }
     }
@@ -561,29 +560,29 @@ impl<M: MessagePayload> Decode for GraftMessageDecoder<M> {
         let mut offset = 0;
         bytecodec_try_decode!(self.destination, offset, buf, eos);
         bytecodec_try_decode!(self.sender, offset, buf, eos);
+        bytecodec_try_decode!(self.round, offset, buf, eos);
         bytecodec_try_decode!(self.has_message_id, offset, buf, eos);
         if self.has_message_id.peek().cloned() == Some(1) {
             bytecodec_try_decode!(self.message_id, offset, buf, eos);
         }
-        bytecodec_try_decode!(self.round, offset, buf, eos);
         Ok(offset)
     }
 
     fn finish_decoding(&mut self) -> Result<Self::Item> {
         let destination = track!(self.destination.finish_decoding())?;
         let sender = track!(self.sender.finish_decoding())?;
+        let round = track!(self.round.finish_decoding())?;
         let has_message_id = track!(self.has_message_id.finish_decoding())? == 1;
         let message_id = if has_message_id {
             Some(track!(self.message_id.finish_decoding())?)
         } else {
             None
         };
-        let round = track!(self.round.finish_decoding())?;
 
         let message = GraftMessage {
             sender,
-            message_id,
             round,
+            message_id,
         };
         Ok((destination, message))
     }
@@ -592,8 +591,8 @@ impl<M: MessagePayload> Decode for GraftMessageDecoder<M> {
         let n = self.destination
             .requiring_bytes()
             .add_for_decoding(self.sender.requiring_bytes())
-            .add_for_decoding(self.has_message_id.requiring_bytes())
-            .add_for_decoding(self.round.requiring_bytes());
+            .add_for_decoding(self.round.requiring_bytes())
+            .add_for_decoding(self.has_message_id.requiring_bytes());
         if self.has_message_id.peek().cloned() == Some(1) {
             n.add_for_decoding(self.message_id.requiring_bytes())
         } else {
@@ -602,7 +601,11 @@ impl<M: MessagePayload> Decode for GraftMessageDecoder<M> {
     }
 
     fn is_idle(&self) -> bool {
-        self.round.is_idle()
+        if let Some(&1) = self.has_message_id.peek() {
+            self.message_id.is_idle()
+        } else {
+            self.has_message_id.is_idle()
+        }
     }
 }
 
@@ -610,9 +613,9 @@ impl<M: MessagePayload> Decode for GraftMessageDecoder<M> {
 pub struct GraftMessageEncoder<M> {
     destination: LocalNodeIdEncoder,
     sender: NodeIdEncoder,
+    round: U16beEncoder,
     has_message_id: U8Encoder,
     message_id: MessageIdEncoder,
-    round: U16beEncoder,
     _phantom: PhantomData<M>,
 }
 impl<M> Default for GraftMessageEncoder<M> {
@@ -620,9 +623,9 @@ impl<M> Default for GraftMessageEncoder<M> {
         GraftMessageEncoder {
             destination: Default::default(),
             sender: Default::default(),
+            round: Default::default(),
             has_message_id: Default::default(),
             message_id: Default::default(),
-            round: Default::default(),
             _phantom: PhantomData,
         }
     }
@@ -634,22 +637,22 @@ impl<M: MessagePayload> Encode for GraftMessageEncoder<M> {
         let mut offset = 0;
         bytecodec_try_encode!(self.destination, offset, buf, eos);
         bytecodec_try_encode!(self.sender, offset, buf, eos);
+        bytecodec_try_encode!(self.round, offset, buf, eos);
         bytecodec_try_encode!(self.has_message_id, offset, buf, eos);
         bytecodec_try_encode!(self.message_id, offset, buf, eos);
-        bytecodec_try_encode!(self.round, offset, buf, eos);
         Ok(offset)
     }
 
     fn start_encoding(&mut self, item: Self::Item) -> Result<()> {
         track!(self.destination.start_encoding(item.0))?;
         track!(self.sender.start_encoding(item.1.sender))?;
+        track!(self.round.start_encoding(item.1.round))?;
         if let Some(message_id) = item.1.message_id {
             track!(self.has_message_id.start_encoding(1))?;
             track!(self.message_id.start_encoding(message_id))?;
         } else {
             track!(self.has_message_id.start_encoding(0))?;
         }
-        track!(self.round.start_encoding(item.1.round))?;
         Ok(())
     }
 
@@ -658,16 +661,16 @@ impl<M: MessagePayload> Encode for GraftMessageEncoder<M> {
     }
 
     fn is_idle(&self) -> bool {
-        self.round.is_idle()
+        self.has_message_id.is_idle() && self.message_id.is_idle()
     }
 }
 impl<M: MessagePayload> SizedEncode for GraftMessageEncoder<M> {
     fn exact_requiring_bytes(&self) -> u64 {
         self.destination.exact_requiring_bytes()
             + self.sender.exact_requiring_bytes()
+            + self.round.exact_requiring_bytes()
             + self.has_message_id.exact_requiring_bytes()
             + self.message_id.exact_requiring_bytes()
-            + self.round.exact_requiring_bytes()
     }
 }
 
