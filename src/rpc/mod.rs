@@ -1,8 +1,8 @@
 use hyparview::message::ProtocolMessage as HyparviewMessage;
 use plumtree::message::ProtocolMessage as PlumtreeMessage;
 
-use node::{MessagePayload, System};
-use NodeId;
+use node::System;
+use {MessagePayload, NodeId};
 
 pub mod hyparview;
 pub mod plumtree;

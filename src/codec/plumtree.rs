@@ -6,13 +6,13 @@ use bytecodec::fixnum::{
 };
 use bytecodec::{ByteCount, Decode, Encode, Eos, Result, SizedEncode};
 use plumtree::message::{GossipMessage, GraftMessage, IhaveMessage, Message, PruneMessage};
+use std::fmt;
 use std::marker::PhantomData;
 
 use super::node::{LocalNodeIdDecoder, LocalNodeIdEncoder, NodeIdDecoder, NodeIdEncoder};
-use node::{MessageId, MessagePayload, System};
-use LocalNodeId;
+use node::System;
+use {LocalNodeId, MessageId, MessagePayload};
 
-#[derive(Debug)]
 pub struct GossipMessageDecoder<M: MessagePayload> {
     destination: LocalNodeIdDecoder,
     sender: NodeIdDecoder,
@@ -27,6 +27,19 @@ impl<M: MessagePayload> Default for GossipMessageDecoder<M> {
             round: Default::default(),
             message: Default::default(),
         }
+    }
+}
+impl<M: MessagePayload> fmt::Debug for GossipMessageDecoder<M>
+where
+    M::Decoder: fmt::Debug,
+{
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        write!(
+            f,
+            "GossipMessageDecoder {{ destination: {:?}, sender: {:?}, \
+             round: {:?}, message: {:?} }}",
+            self.destination, self.sender, self.round, self.message
+        )
     }
 }
 impl<M: MessagePayload> Decode for GossipMessageDecoder<M> {
@@ -67,7 +80,6 @@ impl<M: MessagePayload> Decode for GossipMessageDecoder<M> {
     }
 }
 
-#[derive(Debug)]
 struct MessageDecoder<M: MessagePayload> {
     id: MessageIdDecoder,
     payload: M::Decoder,
@@ -78,6 +90,18 @@ impl<M: MessagePayload> Default for MessageDecoder<M> {
             id: Default::default(),
             payload: Default::default(),
         }
+    }
+}
+impl<M: MessagePayload> fmt::Debug for MessageDecoder<M>
+where
+    M::Decoder: fmt::Debug,
+{
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        write!(
+            f,
+            "MessageDecoder {{ id: {:?}, payload: {:?} }}",
+            self.id, self.payload
+        )
     }
 }
 impl<M: MessagePayload> Decode for MessageDecoder<M> {
@@ -123,9 +147,9 @@ impl Decode for MessageIdDecoder {
     }
 
     fn finish_decoding(&mut self) -> Result<Self::Item> {
-        let node_id = track!(self.node.finish_decoding())?;
+        let node = track!(self.node.finish_decoding())?;
         let seqno = track!(self.seqno.finish_decoding())?;
-        Ok(MessageId { node_id, seqno })
+        Ok(MessageId::new(node, seqno))
     }
 
     fn requiring_bytes(&self) -> ByteCount {
@@ -177,7 +201,6 @@ impl Decode for MessagePayloadDecoder {
     }
 }
 
-#[derive(Debug)]
 pub struct GossipMessageEncoder<M: MessagePayload> {
     destination: LocalNodeIdEncoder,
     sender: NodeIdEncoder,
@@ -192,6 +215,19 @@ impl<M: MessagePayload> Default for GossipMessageEncoder<M> {
             round: Default::default(),
             message: Default::default(),
         }
+    }
+}
+impl<M: MessagePayload> fmt::Debug for GossipMessageEncoder<M>
+where
+    M::Encoder: fmt::Debug,
+{
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        write!(
+            f,
+            "GossipMessageEncoder {{ destination: {:?}, sender: {:?}, \
+             round: {:?}, message: {:?} }}",
+            self.destination, self.sender, self.round, self.message
+        )
     }
 }
 impl<M: MessagePayload> Encode for GossipMessageEncoder<M> {
@@ -238,7 +274,6 @@ where
     }
 }
 
-#[derive(Debug)]
 struct MessageEncoder<M: MessagePayload> {
     id: MessageIdEncoder,
     payload: M::Encoder,
@@ -249,6 +284,18 @@ impl<M: MessagePayload> Default for MessageEncoder<M> {
             id: Default::default(),
             payload: Default::default(),
         }
+    }
+}
+impl<M: MessagePayload> fmt::Debug for MessageEncoder<M>
+where
+    M::Encoder: fmt::Debug,
+{
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        write!(
+            f,
+            "MessageEncoder {{ id: {:?}, payload: {:?} }}",
+            self.id, self.payload
+        )
     }
 }
 impl<M: MessagePayload> Encode for MessageEncoder<M> {
@@ -302,8 +349,8 @@ impl Encode for MessageIdEncoder {
     }
 
     fn start_encoding(&mut self, item: Self::Item) -> Result<()> {
-        track!(self.node.start_encoding(item.node_id))?;
-        track!(self.seqno.start_encoding(item.seqno))?;
+        track!(self.node.start_encoding(item.node().clone()))?;
+        track!(self.seqno.start_encoding(item.seqno()))?;
         Ok(())
     }
 

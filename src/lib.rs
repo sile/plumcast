@@ -14,11 +14,13 @@ extern crate slog;
 extern crate trackable;
 
 pub use error::{Error, ErrorKind};
-pub use node::{LocalNodeId, MessagePayload, Node, NodeId};
+pub use message::{Message, MessageId, MessagePayload};
+pub use node::{LocalNodeId, Node, NodeId};
 pub use service::{Service, ServiceBuilder, ServiceHandle};
 
 mod codec;
 mod error;
+mod message;
 mod node;
 mod rpc;
 mod service;

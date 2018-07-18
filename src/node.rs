@@ -2,18 +2,18 @@ use fibers::sync::mpsc;
 use fibers::time::timer::{self, Timeout};
 use futures::{Async, Future, Poll, Stream};
 use hyparview::{self, Action as HyparviewAction, Node as HyparviewNode};
-use plumtree::message::Message;
+use plumtree::message::Message as PlumtreeAppMessage;
 use plumtree::{self, Action as PlumtreeAction, Node as PlumtreeNode};
 use rand::{self, Rng, SeedableRng, StdRng};
 use slog::Logger;
 use std::collections::VecDeque;
+use std::fmt;
 use std::marker::PhantomData;
 use std::net::SocketAddr;
 use std::time::Duration;
 
 use rpc::RpcMessage;
-use ServiceHandle;
-use {Error, ErrorKind};
+use {Error, ErrorKind, Message, MessageId, MessagePayload, ServiceHandle};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, PartialOrd, Ord)]
 pub struct LocalNodeId(u64);
@@ -33,10 +33,15 @@ pub struct NodeId {
     pub local_id: LocalNodeId,
 }
 
-#[derive(Debug, Clone)]
+#[derive(Clone)]
 pub struct NodeHandle<M: MessagePayload> {
     local_id: LocalNodeId,
     message_tx: mpsc::Sender<RpcMessage<M>>,
+}
+impl<M: MessagePayload> fmt::Debug for NodeHandle<M> {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        write!(f, "NodeHandle {{ local_id: {:?}, .. }}", self.local_id)
+    }
 }
 impl<M: MessagePayload> NodeHandle<M> {
     pub fn local_id(&self) -> LocalNodeId {
@@ -47,16 +52,6 @@ impl<M: MessagePayload> NodeHandle<M> {
         let _ = self.message_tx.send(message);
     }
 }
-impl MessagePayload for Vec<u8> {
-    type Encoder = ::bytecodec::bytes::BytesEncoder<Vec<u8>>;
-    type Decoder = ::bytecodec::bytes::RemainingBytesDecoder;
-}
-
-#[derive(Debug, Clone, PartialEq, Eq, Hash)]
-pub struct MessageId {
-    pub node_id: NodeId,
-    pub seqno: u64,
-}
 
 #[derive(Debug)]
 pub struct System<M>(PhantomData<M>);
@@ -66,18 +61,11 @@ impl<M: MessagePayload> plumtree::System for System<M> {
     type MessagePayload = M;
 }
 
-// TODO: remove Sync, Debug
-pub trait MessagePayload: Sized + Clone + Send + Sync + 'static + ::std::fmt::Debug {
-    type Encoder: ::bytecodec::Encode<Item = Self> + Default + Send + 'static + ::std::fmt::Debug; // TODO: remove Debug
-    type Decoder: ::bytecodec::Decode<Item = Self> + Default + Send + 'static + ::std::fmt::Debug;
-}
-
 const TICK_MS: u64 = 1000; // TODO
 const HYPARVIEW_SHUFFLE_INTERVAL_TICKS: usize = 59;
 const HYPARVIEW_SYNC_INTERVAL_TICKS: usize = 31;
 const HYPARVIEW_FILL_INTERVAL_TICKS: usize = 20;
 
-#[derive(Debug)]
 pub struct Node<M: MessagePayload> {
     logger: Logger,
     id: NodeId,
@@ -87,9 +75,15 @@ pub struct Node<M: MessagePayload> {
     hyparview_node: HyparviewNode<NodeId, StdRng>,
     plumtree_node: PlumtreeNode<System<M>>,
     message_seqno: u64,
-    deliverable_messages: VecDeque<Message<System<M>>>,
+    deliverable_messages: VecDeque<Message<M>>,
     tick: Timeout, // TODO: tick_timeout
     ticks: usize,  // or clock
+}
+impl<M: MessagePayload> fmt::Debug for Node<M> {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        // TODO:
+        write!(f, "Node {{ .. }}")
+    }
 }
 impl<M: MessagePayload> Node<M> {
     pub fn new(logger: Logger, service: ServiceHandle<M>) -> Self {
@@ -128,14 +122,11 @@ impl<M: MessagePayload> Node<M> {
     }
 
     pub fn broadcast(&mut self, message: M) {
-        warn!(self.logger, "[TODO] Broadcast: {:?}", message);
-        let mid = MessageId {
-            node_id: self.id.clone(),
-            seqno: self.message_seqno,
-        };
+        let mid = MessageId::new(self.id.clone(), self.message_seqno);
         self.message_seqno += 1;
+        debug!(self.logger, "Starts broadcasting a message: {:?}", mid);
 
-        let m = Message {
+        let m = PlumtreeAppMessage {
             id: mid,
             payload: message,
         };
@@ -185,12 +176,15 @@ impl<M: MessagePayload> Node<M> {
     }
 
     fn handle_plumtree_action(&mut self, action: PlumtreeAction<System<M>>) {
-        warn!(self.logger, "[TODO] Action: {:?}", action);
         match action {
             PlumtreeAction::Send {
                 destination,
                 message,
             } => {
+                debug!(
+                    self.logger,
+                    "[ACTION] Sends a plumtree message: destination={:?}", destination,
+                );
                 let message = RpcMessage::Plumtree(message);
                 if let Err(e) = self.service.send_message(destination.clone(), message) {
                     // TODO: metrics
@@ -202,7 +196,12 @@ impl<M: MessagePayload> Node<M> {
                 }
             }
             PlumtreeAction::Deliver { message } => {
-                self.deliverable_messages.push_back(message);
+                debug!(
+                    self.logger,
+                    "[ACTION] Delivers an application message: {:?}", message.id
+                );
+                // TODO: metrics
+                self.deliverable_messages.push_back(Message::new(message));
             }
         }
     }
@@ -214,7 +213,7 @@ impl<M: MessagePayload> Node<M> {
                 self.hyparview_node.handle_protocol_message(m);
             }
             RpcMessage::Plumtree(m) => {
-                warn!(self.logger, "[TODO] Recv: {:?}", m); // TODO: remove
+                debug!(self.logger, "Received a plumtree message");
                 self.plumtree_node.handle_protocol_message(m);
             }
         }
@@ -232,7 +231,7 @@ impl<M: MessagePayload> Node<M> {
     }
 }
 impl<M: MessagePayload> Stream for Node<M> {
-    type Item = Message<System<M>>;
+    type Item = Message<M>;
     type Error = Error;
 
     fn poll(&mut self) -> Poll<Option<Self::Item>, Self::Error> {

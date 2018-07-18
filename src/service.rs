@@ -15,9 +15,9 @@ use std::sync::atomic::{AtomicUsize, Ordering};
 use std::sync::Arc;
 
 use metrics::ServiceMetrics;
-use node::{LocalNodeId, MessagePayload, NodeHandle, NodeId};
+use node::{LocalNodeId, NodeHandle, NodeId};
 use rpc::{self, RpcMessage};
-use {Error, ErrorKind, Result};
+use {Error, ErrorKind, MessagePayload, Result};
 
 type LocalNodes<M> = Arc<AtomicImmut<HashMap<LocalNodeId, NodeHandle<M>>>>;
 

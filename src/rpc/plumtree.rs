@@ -9,9 +9,9 @@ use codec::plumtree::{
     GossipMessageDecoder, GossipMessageEncoder, GraftMessageDecoder, GraftMessageEncoder,
     IhaveMessageDecoder, IhaveMessageEncoder, PruneMessageDecoder, PruneMessageEncoder,
 };
-use node::{MessagePayload, System};
+use node::System;
 use service::ServiceHandle;
-use {LocalNodeId, NodeId, Result};
+use {LocalNodeId, MessagePayload, NodeId, Result};
 
 pub fn register_handlers<M: MessagePayload>(rpc: &mut ServerBuilder, service: ServiceHandle<M>) {
     rpc.add_cast_handler(GossipHandler(service.clone()));
@@ -22,6 +22,7 @@ pub fn register_handlers<M: MessagePayload>(rpc: &mut ServerBuilder, service: Se
 
 #[derive(Debug)]
 pub struct GossipCast<M>(PhantomData<M>);
+unsafe impl<M> Sync for GossipCast<M> {}
 impl<M: MessagePayload> Cast for GossipCast<M> {
     const ID: ProcedureId = ProcedureId(0x17CD_0000);
     const NAME: &'static str = "plumtree.gossip";
@@ -56,6 +57,7 @@ impl<M: MessagePayload> HandleCast<GossipCast<M>> for GossipHandler<M> {
 
 #[derive(Debug)]
 pub struct IhaveCast<M>(PhantomData<M>);
+unsafe impl<M> Sync for IhaveCast<M> {}
 impl<M: MessagePayload> Cast for IhaveCast<M> {
     const ID: ProcedureId = ProcedureId(0x17CD_0001);
     const NAME: &'static str = "plumtree.ihave";
@@ -91,6 +93,7 @@ impl<M: MessagePayload> HandleCast<IhaveCast<M>> for IhaveHandler<M> {
 
 #[derive(Debug)]
 pub struct GraftCast<M>(PhantomData<M>);
+unsafe impl<M> Sync for GraftCast<M> {}
 impl<M: MessagePayload> Cast for GraftCast<M> {
     const ID: ProcedureId = ProcedureId(0x17CD_0002);
     const NAME: &'static str = "plumtree.graft";
@@ -124,6 +127,7 @@ impl<M: MessagePayload> HandleCast<GraftCast<M>> for GraftHandler<M> {
 
 #[derive(Debug)]
 pub struct PruneCast<M>(PhantomData<M>);
+unsafe impl<M> Sync for PruneCast<M> {}
 impl<M: MessagePayload> Cast for PruneCast<M> {
     const ID: ProcedureId = ProcedureId(0x17CD_0003);
     const NAME: &'static str = "plumtree.prune";
