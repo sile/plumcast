@@ -12,6 +12,7 @@ futures = "0.1"
 hyparview = "0.0"
 slog = "2"
 plumtree = "0.0"
+prometrics = "0.1"
 rand = "0.5"
 trackable = "0.2"
 
