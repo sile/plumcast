@@ -21,8 +21,6 @@ const HYPARVIEW_FILL_INTERVAL_TICKS: usize = 20;
 
 pub struct Node<M: MessagePayload> {
     logger: Logger,
-    id: NodeId,
-    local_id: LocalNodeId, // TODO: remove
     service: ServiceHandle<M>,
     message_rx: mpsc::Receiver<RpcMessage<M>>,
     hyparview_node: HyparviewNode,
@@ -49,8 +47,6 @@ impl<M: MessagePayload> Node<M> {
         service.register_local_node(handle);
         Node {
             logger,
-            id: id.clone(),
-            local_id: id.local_id(),
             service,
             message_rx,
             hyparview_node: new_hyparview_node(id.clone()),
@@ -62,6 +58,10 @@ impl<M: MessagePayload> Node<M> {
         }
     }
 
+    pub fn id(&self) -> NodeId {
+        *self.plumtree_node().id()
+    }
+
     pub fn join(&mut self, contact_peer: NodeId) {
         info!(
             self.logger,
@@ -71,7 +71,7 @@ impl<M: MessagePayload> Node<M> {
     }
 
     pub fn broadcast(&mut self, message: M) {
-        let mid = MessageId::new(self.id.clone(), self.message_seqno);
+        let mid = MessageId::new(self.id(), self.message_seqno);
         self.message_seqno += 1;
         debug!(self.logger, "Starts broadcasting a message: {:?}", mid);
 
@@ -184,9 +184,7 @@ impl<M: MessagePayload> Node<M> {
         use hyparview::message::{DisconnectMessage, ProtocolMessage};
 
         for peer in self.hyparview_node.active_view().iter().cloned() {
-            let message = DisconnectMessage {
-                sender: self.id.clone(),
-            };
+            let message = DisconnectMessage { sender: self.id() };
             let message = ProtocolMessage::Disconnect(message);
             let message = RpcMessage::Hyparview(message);
             let _ = self.service.send_message(peer, message);
@@ -242,7 +240,7 @@ impl<M: MessagePayload> Stream for Node<M> {
 }
 impl<M: MessagePayload> Drop for Node<M> {
     fn drop(&mut self) {
-        self.service.deregister_local_node(self.local_id);
+        self.service.deregister_local_node(self.id().local_id());
         self.leave();
     }
 }
