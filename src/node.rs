@@ -117,12 +117,8 @@ impl NodeBuilder {
             logger,
             service,
             message_rx,
-            hyparview_node: HyparviewNode::with_options(
-                id.clone(),
-                rng,
-                self.hyparview_options.clone(),
-            ),
-            plumtree_node: PlumtreeNode::with_options(id.clone(), self.plumtree_options.clone()),
+            hyparview_node: HyparviewNode::with_options(id, rng, self.hyparview_options.clone()),
+            plumtree_node: PlumtreeNode::with_options(id, self.plumtree_options.clone()),
             message_seqno: 0,
             clock: Clock::new(self.tick_interval),
             params: self.params.clone(),
@@ -234,7 +230,7 @@ impl<M: MessagePayload> Node<M> {
                     "Sends a HyParView message to {:?}: {:?}", destination, message
                 );
                 let message = RpcMessage::Hyparview(message);
-                if let Err(e) = self.service.send_message(destination.clone(), message) {
+                if let Err(e) = self.service.send_message(destination, message) {
                     warn!(
                         self.logger,
                         "Cannot send a HyParView message to {:?}: {}", destination, e
@@ -289,7 +285,7 @@ impl<M: MessagePayload> Node<M> {
             } => {
                 debug!(self.logger, "Sends a Plumtree message to {:?}", destination,);
                 let message = RpcMessage::Plumtree(message);
-                if let Err(e) = self.service.send_message(destination.clone(), message) {
+                if let Err(e) = self.service.send_message(destination, message) {
                     warn!(
                         self.logger,
                         "Cannot send a Plumtree message to {:?}: {}", destination, e

@@ -39,7 +39,8 @@ impl Stream for Clock {
     type Error = Error;
 
     fn poll(&mut self) -> Poll<Option<Self::Item>, Self::Error> {
-        if track!(self.tick_timeout.poll().map_err(Error::from))?.is_ready() {
+        let is_ready = track!(self.tick_timeout.poll().map_err(Error::from))?.is_ready();
+        if is_ready {
             self.ticks += 1;
             self.tick_timeout = timer::timeout(self.tick_interval);
             Ok(Async::Ready(Some(())))

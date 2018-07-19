@@ -15,7 +15,7 @@ impl LocalNodeId {
     }
 
     /// Returns the value of the identifier.
-    pub fn value(&self) -> u64 {
+    pub fn value(self) -> u64 {
         self.0
     }
 }

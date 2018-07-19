@@ -15,7 +15,7 @@ use {LocalNodeId, MessagePayload, NodeId, Result};
 
 const MAX_QUEUE_LEN: u64 = 4096; // FIXME: parameterize
 
-pub fn register_handlers<M: MessagePayload>(rpc: &mut ServerBuilder, service: ServiceHandle<M>) {
+pub fn register_handlers<M: MessagePayload>(rpc: &mut ServerBuilder, service: &ServiceHandle<M>) {
     rpc.add_cast_handler(GossipHandler(service.clone()));
     rpc.add_cast_handler(IhaveHandler(service.clone()));
     rpc.add_cast_handler(GraftHandler(service.clone()));
@@ -50,7 +50,7 @@ pub fn gossip_cast<M: MessagePayload>(
 struct GossipHandler<M: MessagePayload>(ServiceHandle<M>);
 impl<M: MessagePayload> HandleCast<GossipCast<M>> for GossipHandler<M> {
     fn handle_cast(&self, (id, m): (LocalNodeId, GossipMessage<M>)) -> NoReply {
-        if let Some(node) = self.0.get_local_node_or_disconnect(&id, &m.sender) {
+        if let Some(node) = self.0.get_local_node_or_disconnect(id, &m.sender) {
             node.send_rpc_message(RpcMessage::Plumtree(m.into()));
         }
         NoReply::done()
@@ -85,7 +85,7 @@ pub fn ihave_cast<M: MessagePayload>(
 struct IhaveHandler<M: MessagePayload>(ServiceHandle<M>);
 impl<M: MessagePayload> HandleCast<IhaveCast<M>> for IhaveHandler<M> {
     fn handle_cast(&self, (id, m): (LocalNodeId, IhaveMessage<M>)) -> NoReply {
-        if let Some(node) = self.0.get_local_node_or_disconnect(&id, &m.sender) {
+        if let Some(node) = self.0.get_local_node_or_disconnect(id, &m.sender) {
             node.send_rpc_message(RpcMessage::Plumtree(m.into()));
         }
         NoReply::done()
@@ -123,7 +123,7 @@ pub fn graft_cast<M: MessagePayload>(
 struct GraftHandler<M: MessagePayload>(ServiceHandle<M>);
 impl<M: MessagePayload> HandleCast<GraftCast<M>> for GraftHandler<M> {
     fn handle_cast(&self, (id, m): (LocalNodeId, GraftMessage<M>)) -> NoReply {
-        if let Some(node) = self.0.get_local_node_or_disconnect(&id, &m.sender) {
+        if let Some(node) = self.0.get_local_node_or_disconnect(id, &m.sender) {
             let m = RpcMessage::Plumtree(m.into());
             node.send_rpc_message(m);
         }
@@ -147,7 +147,7 @@ impl<M: MessagePayload> Cast for GraftOptimizeCast<M> {
 struct GraftOptimizeHandler<M: MessagePayload>(ServiceHandle<M>);
 impl<M: MessagePayload> HandleCast<GraftOptimizeCast<M>> for GraftOptimizeHandler<M> {
     fn handle_cast(&self, (id, m): (LocalNodeId, GraftMessage<M>)) -> NoReply {
-        if let Some(node) = self.0.get_local_node_or_disconnect(&id, &m.sender) {
+        if let Some(node) = self.0.get_local_node_or_disconnect(id, &m.sender) {
             let m = RpcMessage::Plumtree(m.into());
             node.send_rpc_message(m);
         }
@@ -181,7 +181,7 @@ pub fn prune_cast<M: MessagePayload>(
 struct PruneHandler<M: MessagePayload>(ServiceHandle<M>);
 impl<M: MessagePayload> HandleCast<PruneCast<M>> for PruneHandler<M> {
     fn handle_cast(&self, (id, m): (LocalNodeId, PruneMessage<M>)) -> NoReply {
-        if let Some(node) = self.0.get_local_node_or_disconnect(&id, &m.sender) {
+        if let Some(node) = self.0.get_local_node_or_disconnect(id, &m.sender) {
             node.send_rpc_message(RpcMessage::Plumtree(m.into()));
         }
         NoReply::done()

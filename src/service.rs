@@ -98,8 +98,8 @@ impl ServiceBuilder {
             metric_builder: Arc::new(Mutex::new(self.metrics)),
         };
 
-        rpc::hyparview::register_handlers(&mut self.rpc_server_builder, handle.clone());
-        rpc::plumtree::register_handlers(&mut self.rpc_server_builder, handle.clone());
+        rpc::hyparview::register_handlers(&mut self.rpc_server_builder, &handle);
+        rpc::plumtree::register_handlers(&mut self.rpc_server_builder, &handle);
         let rpc_server = self.rpc_server_builder.finish(spawner);
 
         Service {
@@ -277,22 +277,22 @@ impl<M: MessagePayload> ServiceHandle<M> {
         NodeId::new(self.server_addr, local_id)
     }
 
-    pub(crate) fn get_local_node(&self, local_id: &LocalNodeId) -> Option<NodeHandle<M>> {
-        self.local_nodes.load().get(local_id).cloned()
+    pub(crate) fn get_local_node(&self, local_id: LocalNodeId) -> Option<NodeHandle<M>> {
+        self.local_nodes.load().get(&local_id).cloned()
     }
 
     pub(crate) fn get_local_node_or_disconnect(
         &self,
-        id: &LocalNodeId,
+        id: LocalNodeId,
         sender: &NodeId,
     ) -> Option<NodeHandle<M>> {
-        if let Some(node) = self.local_nodes.load().get(id).cloned() {
+        if let Some(node) = self.local_nodes.load().get(&id).cloned() {
             Some(node)
         } else {
             use hyparview::message::{DisconnectMessage, ProtocolMessage};
 
             self.metrics.destination_unknown_messages.increment();
-            let missing = NodeId::new(self.server_addr, id.clone());
+            let missing = NodeId::new(self.server_addr, id);
             let message = DisconnectMessage { sender: missing };
             let message = ProtocolMessage::Disconnect(message);
             let _ = self.send_message(sender.clone(), RpcMessage::Hyparview(message));
