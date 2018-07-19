@@ -4,6 +4,7 @@ use std::marker::PhantomData;
 use {MessageId, MessagePayload, NodeId};
 
 pub type PlumtreeNode<M> = plumtree::Node<PlumtreeSystem<M>>;
+pub type PlumtreeNodeOptions = plumtree::NodeOptions;
 pub type PlumtreeAction<M> = plumtree::Action<PlumtreeSystem<M>>;
 
 pub type Message<M> = plumtree::message::Message<PlumtreeSystem<M>>;

@@ -15,11 +15,11 @@ extern crate trackable;
 
 pub use clock::Clock;
 pub use error::{Error, ErrorKind};
-pub use hyparview_misc::HyparviewNode;
+pub use hyparview_misc::{HyparviewNode, HyparviewNodeOptions};
 pub use message::{Message, MessageId, MessagePayload};
 pub use node::{Node, NodeBuilder};
 pub use node_id::{LocalNodeId, NodeId};
-pub use plumtree_misc::{PlumtreeNode, PlumtreeSystem};
+pub use plumtree_misc::{PlumtreeNode, PlumtreeNodeOptions, PlumtreeSystem};
 pub use service::{Service, ServiceBuilder, ServiceHandle};
 
 mod clock;

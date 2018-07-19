@@ -1,6 +1,9 @@
 //! [Prometheus][prometheus] metrics.
 //!
+//! Note that you can also use [fibers_rpc's metrics] in addition to the metrics defined in this module.
+//!
 //! [prometheus]: https://prometheus.io/
+//! [fibers_rpc's metrics]: https://docs.rs/fibers_rpc/0.2/fibers_rpc/metrics/index.html
 use prometrics::metrics::{Counter, MetricBuilder};
 
 /// Metrics of [`Service`].

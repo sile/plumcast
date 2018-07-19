@@ -27,7 +27,7 @@ impl LocalNodeId {
 ///
 /// [`Node`]: ./struct.Node.html
 /// [`LocalNodeId`]: ./struct.LocalNodeId.html
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+#[derive(Clone, Copy, PartialEq, Eq, Hash)]
 pub struct NodeId {
     address: SocketAddr,
     local_id: LocalNodeId,
@@ -46,6 +46,11 @@ impl NodeId {
     /// Returns the local node identifier part of the identifier.
     pub fn local_id(&self) -> LocalNodeId {
         self.local_id
+    }
+}
+impl fmt::Debug for NodeId {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        write!(f, "NodeId({:?})", self.to_string())
     }
 }
 impl fmt::Display for NodeId {
