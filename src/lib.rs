@@ -13,14 +13,16 @@ extern crate slog;
 #[macro_use]
 extern crate trackable;
 
+pub use clock::Clock;
 pub use error::{Error, ErrorKind};
 pub use hyparview_misc::HyparviewNode;
 pub use message::{Message, MessageId, MessagePayload};
-pub use node::Node;
+pub use node::{Node, NodeBuilder};
 pub use node_id::{LocalNodeId, NodeId};
 pub use plumtree_misc::{PlumtreeNode, PlumtreeSystem};
 pub use service::{Service, ServiceBuilder, ServiceHandle};
 
+mod clock;
 mod codec;
 mod error;
 mod hyparview_misc;

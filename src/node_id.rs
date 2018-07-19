@@ -1,3 +1,4 @@
+use std::fmt;
 use std::net::SocketAddr;
 
 /// Identifier used for distinguish local nodes in a process.
@@ -45,5 +46,10 @@ impl NodeId {
     /// Returns the local node identifier part of the identifier.
     pub fn local_id(&self) -> LocalNodeId {
         self.local_id
+    }
+}
+impl fmt::Display for NodeId {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        write!(f, "{:08x}@{}", self.local_id.0, self.address)
     }
 }

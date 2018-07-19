@@ -1,8 +1,7 @@
 use fibers::sync::mpsc;
-use fibers::time::timer::{self, Timeout};
-use futures::{Async, Future, Poll, Stream};
+use futures::{Async, Poll, Stream};
 use plumtree::message::Message as PlumtreeAppMessage;
-use slog::Logger;
+use slog::{Discard, Logger};
 use std::collections::VecDeque;
 use std::fmt;
 use std::time::Duration;
@@ -10,35 +9,52 @@ use std::time::Duration;
 use hyparview_misc::{new_hyparview_node, HyparviewAction, HyparviewNode};
 use plumtree_misc::{PlumtreeAction, PlumtreeNode};
 use rpc::RpcMessage;
-use {Error, ErrorKind, LocalNodeId, Message, MessageId, MessagePayload, NodeId, ServiceHandle};
+use {
+    Clock, Error, ErrorKind, LocalNodeId, Message, MessageId, MessagePayload, NodeId, ServiceHandle,
+};
 
-const TICK_MS: u64 = 1000; // TODO
-const HYPARVIEW_SHUFFLE_INTERVAL_TICKS: usize = 59;
-const HYPARVIEW_SYNC_INTERVAL_TICKS: usize = 31;
-const HYPARVIEW_FILL_INTERVAL_TICKS: usize = 20;
+const HYPARVIEW_SHUFFLE_INTERVAL_TICKS: u64 = 59;
+const HYPARVIEW_SYNC_INTERVAL_TICKS: u64 = 31;
+const HYPARVIEW_FILL_INTERVAL_TICKS: u64 = 20;
 
-// TODO: NodeBuilder
-
-pub struct Node<M: MessagePayload> {
+/// The builder of [`Node`].
+///
+/// [`Node`]: ./struct.Node.html
+pub struct NodeBuilder {
     logger: Logger,
-    service: ServiceHandle<M>,
-    message_rx: mpsc::Receiver<RpcMessage<M>>,
-    hyparview_node: HyparviewNode,
-    plumtree_node: PlumtreeNode<M>,
-    message_seqno: u64,
-    deliverable_messages: VecDeque<Message<M>>,
-    tick: Timeout, // TODO: tick_timeout
-    ticks: usize,  // or clock
+    tick_interval: Duration,
 }
-impl<M: MessagePayload> fmt::Debug for Node<M> {
-    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        // TODO:
-        write!(f, "Node {{ .. }}")
+impl NodeBuilder {
+    /// Makes a new `NodeBuilder` instance with the default settings.
+    pub fn new() -> Self {
+        NodeBuilder {
+            logger: Logger::root(Discard, o!()),
+            tick_interval: Duration::from_millis(100),
+        }
     }
-}
-impl<M: MessagePayload> Node<M> {
-    pub fn new(logger: Logger, service: ServiceHandle<M>) -> Self {
+
+    /// Sets the logger used by the node.
+    ///
+    /// The default value is `Logger::root(Discard, o!())`.
+    pub fn logger(&mut self, logger: Logger) -> &mut Self {
+        self.logger = logger;
+        self
+    }
+
+    /// Sets the unit of the node local [`Clock`].
+    ///
+    /// The default value is `Duration::from_millis(100)`.
+    pub fn tick_interval(&mut self, interval: Duration) -> &mut Self {
+        self.tick_interval = interval;
+        self
+    }
+
+    /// Builds a [`Node`] instance with the specified settings.
+    ///
+    /// [`Node`]: ./struct.Node.html
+    pub fn finish<M: MessagePayload>(&self, service: ServiceHandle<M>) -> Node<M> {
         let id = service.generate_node_id();
+        let logger = self.logger.new(o!{"node_id" => id.to_string()});
         let (message_tx, message_rx) = mpsc::channel();
         let handle = NodeHandle {
             local_id: id.local_id(),
@@ -51,15 +67,45 @@ impl<M: MessagePayload> Node<M> {
             message_rx,
             hyparview_node: new_hyparview_node(id.clone()),
             plumtree_node: PlumtreeNode::new(id.clone()),
-            message_seqno: 0, // TODO: random (or make initial node id random)
+            message_seqno: 0,
             deliverable_messages: VecDeque::new(),
-            tick: timer::timeout(Duration::from_millis(TICK_MS)),
-            ticks: 0,
+            clock: Clock::new(self.tick_interval),
         }
+    }
+}
+impl Default for NodeBuilder {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
+pub struct Node<M: MessagePayload> {
+    logger: Logger,
+    service: ServiceHandle<M>,
+    message_rx: mpsc::Receiver<RpcMessage<M>>,
+    hyparview_node: HyparviewNode,
+    plumtree_node: PlumtreeNode<M>,
+    message_seqno: u64,
+    deliverable_messages: VecDeque<Message<M>>,
+    clock: Clock,
+}
+impl<M: MessagePayload> fmt::Debug for Node<M> {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        // TODO:
+        write!(f, "Node {{ .. }}")
+    }
+}
+impl<M: MessagePayload> Node<M> {
+    pub fn new(service: ServiceHandle<M>) -> Self {
+        NodeBuilder::new().finish(service)
     }
 
     pub fn id(&self) -> NodeId {
         *self.plumtree_node().id()
+    }
+
+    pub fn clock(&self) -> &Clock {
+        &self.clock
     }
 
     pub fn join(&mut self, contact_peer: NodeId) {
@@ -196,21 +242,19 @@ impl<M: MessagePayload> Stream for Node<M> {
     type Error = Error;
 
     fn poll(&mut self) -> Poll<Option<Self::Item>, Self::Error> {
-        while track!(self.tick.poll().map_err(Error::from))?.is_ready() {
+        while track!(self.clock.poll())?.is_ready() {
             self.plumtree_node.tick();
-            self.ticks += 1;
-            if self.ticks % HYPARVIEW_SHUFFLE_INTERVAL_TICKS == 0 {
+            if self.clock.ticks() % HYPARVIEW_SHUFFLE_INTERVAL_TICKS == 0 {
                 self.hyparview_node.shuffle_passive_view();
             }
-            if self.ticks % HYPARVIEW_FILL_INTERVAL_TICKS == 0
+            if self.clock.ticks() % HYPARVIEW_FILL_INTERVAL_TICKS == 0
                 || self.hyparview_node.active_view().is_empty()
             {
                 self.hyparview_node.fill_active_view();
             }
-            if self.ticks % HYPARVIEW_SYNC_INTERVAL_TICKS == 0 {
+            if self.clock.ticks() % HYPARVIEW_SYNC_INTERVAL_TICKS == 0 {
                 self.hyparview_node.sync_active_view();
             }
-            self.tick = timer::timeout(Duration::from_millis(TICK_MS));
         }
 
         let mut did_something = true;

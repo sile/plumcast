@@ -14,7 +14,7 @@ use fibers::sync::mpsc;
 use fibers::{Executor, Spawn, ThreadPoolExecutor};
 use futures::{Async, Future, Poll, Stream};
 use plumcast::ServiceBuilder;
-use plumcast::{LocalNodeId, Node, NodeId};
+use plumcast::{LocalNodeId, Node, NodeBuilder, NodeId};
 use sloggers::terminal::{Destination, TerminalLoggerBuilder};
 use sloggers::Build;
 use std::net::SocketAddr;
@@ -52,7 +52,7 @@ fn main() -> Result<(), MainError> {
         .local_node_id_start(0)
         .finish(executor.handle());
 
-    let mut node = Node::new(logger, service.handle());
+    let mut node = NodeBuilder::new().logger(logger).finish(service.handle());
     if let Some(contact) = matches.value_of("CONTACT_SERVER") {
         let contact: SocketAddr = track_any_err!(contact.parse())?;
         node.join(NodeId::new(contact, LocalNodeId::new(0)));
@@ -86,7 +86,7 @@ fn main() -> Result<(), MainError> {
 }
 
 struct ChatNode {
-    inner: Node<Vec<u8>>,
+    inner: Node<String>,
     message_rx: mpsc::Receiver<String>,
 }
 impl Future for ChatNode {
@@ -103,7 +103,7 @@ impl Future for ChatNode {
                 did_something = true;
             }
             while let Async::Ready(Some(m)) = self.message_rx.poll().expect("Never fails") {
-                self.inner.broadcast(m.into());
+                self.inner.broadcast(m);
                 did_something = true;
             }
         }
