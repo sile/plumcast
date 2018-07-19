@@ -6,7 +6,8 @@ use std::marker::PhantomData;
 use super::RpcMessage;
 use codec::plumtree::{
     GossipMessageDecoder, GossipMessageEncoder, GraftMessageDecoder, GraftMessageEncoder,
-    IhaveMessageDecoder, IhaveMessageEncoder, PruneMessageDecoder, PruneMessageEncoder,
+    GraftOptimizeMessageDecoder, GraftOptimizeMessageEncoder, IhaveMessageDecoder,
+    IhaveMessageEncoder, PruneMessageDecoder, PruneMessageEncoder,
 };
 use plumtree_misc::{GossipMessage, GraftMessage, IhaveMessage, PruneMessage};
 use service::ServiceHandle;
@@ -18,6 +19,7 @@ pub fn register_handlers<M: MessagePayload>(rpc: &mut ServerBuilder, service: Se
     rpc.add_cast_handler(GossipHandler(service.clone()));
     rpc.add_cast_handler(IhaveHandler(service.clone()));
     rpc.add_cast_handler(GraftHandler(service.clone()));
+    rpc.add_cast_handler(GraftOptimizeHandler(service.clone()));
     rpc.add_cast_handler(PruneHandler(service.clone()));
 }
 
@@ -107,8 +109,13 @@ pub fn graft_cast<M: MessagePayload>(
     m: GraftMessage<M>,
     service: &ClientServiceHandle,
 ) -> Result<()> {
-    let client = GraftCast::client(&service);
-    track!(client.cast(peer.address(), (peer.local_id(), m)))?;
+    if m.message_id.is_some() {
+        let client = GraftCast::client(&service);
+        track!(client.cast(peer.address(), (peer.local_id(), m)))?;
+    } else {
+        let client = GraftOptimizeCast::client(&service);
+        track!(client.cast(peer.address(), (peer.local_id(), m)))?;
+    }
     Ok(())
 }
 
@@ -125,10 +132,34 @@ impl<M: MessagePayload> HandleCast<GraftCast<M>> for GraftHandler<M> {
 }
 
 #[derive(Debug)]
+pub struct GraftOptimizeCast<M>(PhantomData<M>);
+unsafe impl<M> Sync for GraftOptimizeCast<M> {}
+impl<M: MessagePayload> Cast for GraftOptimizeCast<M> {
+    const ID: ProcedureId = ProcedureId(0x17CD_0003);
+    const NAME: &'static str = "plumtree.graft.optimize";
+
+    type Notification = (LocalNodeId, GraftMessage<M>);
+    type Decoder = GraftOptimizeMessageDecoder<M>;
+    type Encoder = GraftOptimizeMessageEncoder<M>;
+}
+
+#[derive(Debug)]
+struct GraftOptimizeHandler<M: MessagePayload>(ServiceHandle<M>);
+impl<M: MessagePayload> HandleCast<GraftOptimizeCast<M>> for GraftOptimizeHandler<M> {
+    fn handle_cast(&self, (id, m): (LocalNodeId, GraftMessage<M>)) -> NoReply {
+        if let Some(node) = self.0.get_local_node_or_disconnect(&id, &m.sender) {
+            let m = RpcMessage::Plumtree(m.into());
+            node.send_rpc_message(m);
+        }
+        NoReply::done()
+    }
+}
+
+#[derive(Debug)]
 pub struct PruneCast<M>(PhantomData<M>);
 unsafe impl<M> Sync for PruneCast<M> {}
 impl<M: MessagePayload> Cast for PruneCast<M> {
-    const ID: ProcedureId = ProcedureId(0x17CD_0003);
+    const ID: ProcedureId = ProcedureId(0x17CD_0004);
     const NAME: &'static str = "plumtree.prune";
 
     type Notification = (LocalNodeId, PruneMessage<M>);

@@ -4,7 +4,7 @@ use bytecodec::fixnum::{
     U16beDecoder, U16beEncoder, U32beDecoder, U32beEncoder, U64beDecoder, U64beEncoder, U8Decoder,
     U8Encoder,
 };
-use bytecodec::{ByteCount, Decode, Encode, Eos, Result, SizedEncode};
+use bytecodec::{ByteCount, Decode, Encode, Eos, ErrorKind, Result, SizedEncode};
 use std::fmt;
 use std::marker::PhantomData;
 
@@ -536,7 +536,6 @@ pub struct GraftMessageDecoder<M> {
     destination: LocalNodeIdDecoder,
     sender: NodeIdDecoder,
     round: U16beDecoder,
-    has_message_id: Peekable<U8Decoder>,
     message_id: MessageIdDecoder,
     _phantom: PhantomData<M>,
 }
@@ -546,7 +545,6 @@ impl<M> Default for GraftMessageDecoder<M> {
             destination: Default::default(),
             sender: Default::default(),
             round: Default::default(),
-            has_message_id: Default::default(),
             message_id: Default::default(),
             _phantom: PhantomData,
         }
@@ -560,10 +558,7 @@ impl<M: MessagePayload> Decode for GraftMessageDecoder<M> {
         bytecodec_try_decode!(self.destination, offset, buf, eos);
         bytecodec_try_decode!(self.sender, offset, buf, eos);
         bytecodec_try_decode!(self.round, offset, buf, eos);
-        bytecodec_try_decode!(self.has_message_id, offset, buf, eos);
-        if self.has_message_id.peek().cloned() == Some(1) {
-            bytecodec_try_decode!(self.message_id, offset, buf, eos);
-        }
+        bytecodec_try_decode!(self.message_id, offset, buf, eos);
         Ok(offset)
     }
 
@@ -571,40 +566,26 @@ impl<M: MessagePayload> Decode for GraftMessageDecoder<M> {
         let destination = track!(self.destination.finish_decoding())?;
         let sender = track!(self.sender.finish_decoding())?;
         let round = track!(self.round.finish_decoding())?;
-        let has_message_id = track!(self.has_message_id.finish_decoding())? == 1;
-        let message_id = if has_message_id {
-            Some(track!(self.message_id.finish_decoding())?)
-        } else {
-            None
-        };
+        let message_id = track!(self.message_id.finish_decoding())?;
 
         let message = GraftMessage {
             sender,
             round,
-            message_id,
+            message_id: Some(message_id),
         };
         Ok((destination, message))
     }
 
     fn requiring_bytes(&self) -> ByteCount {
-        let n = self.destination
+        self.destination
             .requiring_bytes()
             .add_for_decoding(self.sender.requiring_bytes())
             .add_for_decoding(self.round.requiring_bytes())
-            .add_for_decoding(self.has_message_id.requiring_bytes());
-        if self.has_message_id.peek().cloned() == Some(1) {
-            n.add_for_decoding(self.message_id.requiring_bytes())
-        } else {
-            n
-        }
+            .add_for_decoding(self.message_id.requiring_bytes())
     }
 
     fn is_idle(&self) -> bool {
-        if let Some(&1) = self.has_message_id.peek() {
-            self.message_id.is_idle()
-        } else {
-            self.has_message_id.is_idle()
-        }
+        self.message_id.is_idle()
     }
 }
 
@@ -613,7 +594,6 @@ pub struct GraftMessageEncoder<M> {
     destination: LocalNodeIdEncoder,
     sender: NodeIdEncoder,
     round: U16beEncoder,
-    has_message_id: U8Encoder,
     message_id: MessageIdEncoder,
     _phantom: PhantomData<M>,
 }
@@ -623,7 +603,6 @@ impl<M> Default for GraftMessageEncoder<M> {
             destination: Default::default(),
             sender: Default::default(),
             round: Default::default(),
-            has_message_id: Default::default(),
             message_id: Default::default(),
             _phantom: PhantomData,
         }
@@ -637,7 +616,6 @@ impl<M: MessagePayload> Encode for GraftMessageEncoder<M> {
         bytecodec_try_encode!(self.destination, offset, buf, eos);
         bytecodec_try_encode!(self.sender, offset, buf, eos);
         bytecodec_try_encode!(self.round, offset, buf, eos);
-        bytecodec_try_encode!(self.has_message_id, offset, buf, eos);
         bytecodec_try_encode!(self.message_id, offset, buf, eos);
         Ok(offset)
     }
@@ -646,12 +624,9 @@ impl<M: MessagePayload> Encode for GraftMessageEncoder<M> {
         track!(self.destination.start_encoding(item.0))?;
         track!(self.sender.start_encoding(item.1.sender))?;
         track!(self.round.start_encoding(item.1.round))?;
-        if let Some(message_id) = item.1.message_id {
-            track!(self.has_message_id.start_encoding(1))?;
-            track!(self.message_id.start_encoding(message_id))?;
-        } else {
-            track!(self.has_message_id.start_encoding(0))?;
-        }
+
+        let message_id = track_assert_some!(item.1.message_id, ErrorKind::InconsistentState);
+        track!(self.message_id.start_encoding(message_id))?;
         Ok(())
     }
 
@@ -660,7 +635,7 @@ impl<M: MessagePayload> Encode for GraftMessageEncoder<M> {
     }
 
     fn is_idle(&self) -> bool {
-        self.has_message_id.is_idle() && self.message_id.is_idle()
+        self.message_id.is_idle()
     }
 }
 impl<M: MessagePayload> SizedEncode for GraftMessageEncoder<M> {
@@ -668,8 +643,112 @@ impl<M: MessagePayload> SizedEncode for GraftMessageEncoder<M> {
         self.destination.exact_requiring_bytes()
             + self.sender.exact_requiring_bytes()
             + self.round.exact_requiring_bytes()
-            + self.has_message_id.exact_requiring_bytes()
             + self.message_id.exact_requiring_bytes()
+    }
+}
+
+#[derive(Debug)]
+pub struct GraftOptimizeMessageDecoder<M> {
+    destination: LocalNodeIdDecoder,
+    sender: NodeIdDecoder,
+    round: U16beDecoder,
+    _phantom: PhantomData<M>,
+}
+impl<M> Default for GraftOptimizeMessageDecoder<M> {
+    fn default() -> Self {
+        GraftOptimizeMessageDecoder {
+            destination: Default::default(),
+            sender: Default::default(),
+            round: Default::default(),
+            _phantom: PhantomData,
+        }
+    }
+}
+impl<M: MessagePayload> Decode for GraftOptimizeMessageDecoder<M> {
+    type Item = (LocalNodeId, GraftMessage<M>);
+
+    fn decode(&mut self, buf: &[u8], eos: Eos) -> Result<usize> {
+        let mut offset = 0;
+        bytecodec_try_decode!(self.destination, offset, buf, eos);
+        bytecodec_try_decode!(self.sender, offset, buf, eos);
+        bytecodec_try_decode!(self.round, offset, buf, eos);
+        Ok(offset)
+    }
+
+    fn finish_decoding(&mut self) -> Result<Self::Item> {
+        let destination = track!(self.destination.finish_decoding())?;
+        let sender = track!(self.sender.finish_decoding())?;
+        let round = track!(self.round.finish_decoding())?;
+
+        let message = GraftMessage {
+            sender,
+            round,
+            message_id: None,
+        };
+        Ok((destination, message))
+    }
+
+    fn requiring_bytes(&self) -> ByteCount {
+        self.destination
+            .requiring_bytes()
+            .add_for_decoding(self.sender.requiring_bytes())
+            .add_for_decoding(self.round.requiring_bytes())
+    }
+
+    fn is_idle(&self) -> bool {
+        self.round.is_idle()
+    }
+}
+
+#[derive(Debug)]
+pub struct GraftOptimizeMessageEncoder<M> {
+    destination: LocalNodeIdEncoder,
+    sender: NodeIdEncoder,
+    round: U16beEncoder,
+    _phantom: PhantomData<M>,
+}
+impl<M> Default for GraftOptimizeMessageEncoder<M> {
+    fn default() -> Self {
+        GraftOptimizeMessageEncoder {
+            destination: Default::default(),
+            sender: Default::default(),
+            round: Default::default(),
+            _phantom: PhantomData,
+        }
+    }
+}
+impl<M: MessagePayload> Encode for GraftOptimizeMessageEncoder<M> {
+    type Item = (LocalNodeId, GraftMessage<M>);
+
+    fn encode(&mut self, buf: &mut [u8], eos: Eos) -> Result<usize> {
+        let mut offset = 0;
+        bytecodec_try_encode!(self.destination, offset, buf, eos);
+        bytecodec_try_encode!(self.sender, offset, buf, eos);
+        bytecodec_try_encode!(self.round, offset, buf, eos);
+        Ok(offset)
+    }
+
+    fn start_encoding(&mut self, item: Self::Item) -> Result<()> {
+        track!(self.destination.start_encoding(item.0))?;
+        track!(self.sender.start_encoding(item.1.sender))?;
+        track!(self.round.start_encoding(item.1.round))?;
+        track_assert_eq!(item.1.message_id, None, ErrorKind::InconsistentState);
+        Ok(())
+    }
+
+    fn requiring_bytes(&self) -> ByteCount {
+        ByteCount::Finite(self.exact_requiring_bytes())
+    }
+
+    fn is_idle(&self) -> bool {
+        self.round.is_idle()
+    }
+}
+impl<M: MessagePayload> SizedEncode for GraftOptimizeMessageEncoder<M> {
+    fn exact_requiring_bytes(&self) -> u64 {
+        self.destination.exact_requiring_bytes()
+            + self.sender.exact_requiring_bytes()
+            + self.round.exact_requiring_bytes()
     }
 }
 
