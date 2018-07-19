@@ -7,6 +7,7 @@ use std::fmt;
 use std::time::Duration;
 
 use hyparview_misc::{HyparviewAction, HyparviewNode, HyparviewNodeOptions};
+use metrics::NodeMetrics;
 use plumtree_misc::{PlumtreeAction, PlumtreeNode, PlumtreeNodeOptions};
 use rpc::RpcMessage;
 use {
@@ -97,18 +98,18 @@ impl NodeBuilder {
         self
     }
 
-    // TODO: metrics
-
     /// Builds a [`Node`] instance with the specified settings.
     ///
     /// [`Node`]: ./struct.Node.html
     pub fn finish<M: MessagePayload>(&self, service: ServiceHandle<M>) -> Node<M> {
         let id = service.generate_node_id();
         let logger = self.logger.new(o!{"node_id" => id.to_string()});
+        let metrics = NodeMetrics::new(service.metric_builder());
         let (message_tx, message_rx) = mpsc::channel();
         let handle = NodeHandle {
             local_id: id.local_id(),
             message_tx,
+            metrics: metrics.clone(),
         };
         let rng = StdRng::from_seed(rand::thread_rng().gen());
         service.register_local_node(handle);
@@ -125,6 +126,7 @@ impl NodeBuilder {
             message_seqno: 0,
             clock: Clock::new(self.tick_interval),
             params: self.params.clone(),
+            metrics,
         }
     }
 }
@@ -146,6 +148,7 @@ pub struct Node<M: MessagePayload> {
     message_seqno: u64,
     clock: Clock,
     params: Parameters,
+    metrics: NodeMetrics,
 }
 impl<M: MessagePayload> Node<M> {
     /// Makes a new `Node` instance with the default settings.
@@ -179,20 +182,22 @@ impl<M: MessagePayload> Node<M> {
         self.message_seqno += 1;
         debug!(self.logger, "Starts broadcasting a message: {:?}", id);
 
-        // TODO: metrics
         let m = PlumtreeAppMessage {
             id,
             payload: message_payload,
         };
         self.plumtree_node.broadcast_message(m);
+        self.metrics.broadcasted_messages.increment()
     }
 
     /// Forgets the specified message.
     ///
     /// For preventing memory shortage, this method needs to be called appropriately.
     pub fn forget_message(&mut self, message_id: &MessageId) {
-        if !self.plumtree_node.forget_message(message_id) {
-            // TODO: metrics
+        if self.plumtree_node.forget_message(message_id) {
+            self.metrics.forgot_messages.increment();
+        } else {
+            self.metrics.forget_unknown_message_errors.increment();
         }
     }
 
@@ -211,6 +216,11 @@ impl<M: MessagePayload> Node<M> {
         &self.clock
     }
 
+    /// Returns the metrics of the service.
+    pub fn metrics(&self) -> &NodeMetrics {
+        &self.metrics
+    }
+
     fn handle_hyparview_action(&mut self, action: HyparviewAction) {
         use hyparview::{Action, Event};
 
@@ -225,46 +235,45 @@ impl<M: MessagePayload> Node<M> {
                 );
                 let message = RpcMessage::Hyparview(message);
                 if let Err(e) = self.service.send_message(destination.clone(), message) {
-                    // TODO: metrics
                     warn!(
                         self.logger,
                         "Cannot send a HyParView message to {:?}: {}", destination, e
                     );
+                    self.metrics
+                        .cannot_send_hyparview_message_errors
+                        .increment();
                     self.hyparview_node.disconnect(&destination);
                 }
             }
             Action::Notify { event } => match event {
                 Event::NeighborUp { node } => {
-                    // TODO: metrics
                     info!(
                         self.logger,
                         "Neighbor up: {:?} (active_view={:?})",
                         node,
                         self.hyparview_node.active_view()
                     );
+                    self.metrics.connected_neighbors.increment();
                     self.plumtree_node.handle_neighbor_up(&node);
                     if self.hyparview_node.active_view().len() == 1 {
-                        // TODO: metrics
-                        // TODO: log
+                        self.metrics.deisolated_times.increment();
                     }
                 }
                 Event::NeighborDown { node } => {
-                    // TODO: metrics
                     info!(
                         self.logger,
                         "Neighbor down: {:?} (active_view={:?})",
                         node,
                         self.hyparview_node.active_view()
                     );
+                    self.metrics.disconnected_neighbors.increment();
                     self.plumtree_node.handle_neighbor_down(&node);
                     if self.hyparview_node.active_view().is_empty() {
-                        // TODO: metrics
-                        // TODO: log
+                        self.metrics.isolated_times.increment();
                     }
                 }
             },
             Action::Disconnect { node } => {
-                // TODO: metrics
                 info!(self.logger, "Disconnected: {:?}", node);
             }
         }
@@ -281,11 +290,11 @@ impl<M: MessagePayload> Node<M> {
                 debug!(self.logger, "Sends a Plumtree message to {:?}", destination,);
                 let message = RpcMessage::Plumtree(message);
                 if let Err(e) = self.service.send_message(destination.clone(), message) {
-                    // TODO: metrics
                     warn!(
                         self.logger,
                         "Cannot send a Plumtree message to {:?}: {}", destination, e
                     );
+                    self.metrics.cannot_send_plumtree_message_errors.increment();
                     self.hyparview_node.disconnect(&destination);
                 }
                 None
@@ -295,7 +304,7 @@ impl<M: MessagePayload> Node<M> {
                     self.logger,
                     "Delivers an application message: {:?}", message.id
                 );
-                // TODO: metrics
+                self.metrics.delivered_messages.increment();
                 Some(Message::new(message))
             }
         }
@@ -309,8 +318,9 @@ impl<M: MessagePayload> Node<M> {
             }
             RpcMessage::Plumtree(m) => {
                 debug!(self.logger, "Received a Plumtree message");
-                self.plumtree_node.handle_protocol_message(m);
-                // TODO: if ! ... { metrics }
+                if !self.plumtree_node.handle_protocol_message(m) {
+                    self.metrics.unknown_plumtree_node_errors.increment();
+                }
             }
         }
     }
@@ -389,6 +399,7 @@ impl<M: MessagePayload> Drop for Node<M> {
 pub struct NodeHandle<M: MessagePayload> {
     local_id: LocalNodeId,
     message_tx: mpsc::Sender<RpcMessage<M>>,
+    metrics: NodeMetrics,
 }
 impl<M: MessagePayload> fmt::Debug for NodeHandle<M> {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
@@ -402,6 +413,10 @@ impl<M: MessagePayload> NodeHandle<M> {
 
     pub fn send_rpc_message(&self, message: RpcMessage<M>) {
         let _ = self.message_tx.send(message);
+    }
+
+    pub fn metrics(&self) -> &NodeMetrics {
+        &self.metrics
     }
 }
 

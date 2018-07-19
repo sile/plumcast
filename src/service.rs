@@ -13,9 +13,9 @@ use slog::{Discard, Logger};
 use std::collections::HashMap;
 use std::net::SocketAddr;
 use std::sync::atomic::{AtomicUsize, Ordering};
-use std::sync::Arc;
+use std::sync::{Arc, Mutex};
 
-use metrics::ServiceMetrics;
+use metrics::{NodeMetrics, ServiceMetrics};
 use node::NodeHandle;
 use rpc::{self, RpcMessage};
 use {Error, ErrorKind, LocalNodeId, MessagePayload, NodeId, Result};
@@ -86,7 +86,8 @@ impl ServiceBuilder {
         let (command_tx, command_rx) = mpsc::channel();
         let rpc_client_service = self.rpc_client_service_builder.finish(spawner.clone());
 
-        let metrics = ServiceMetrics::new(self.metrics);
+        let metrics = ServiceMetrics::new(self.metrics.clone());
+        let removed_nodes_metrics = NodeMetrics::new(self.metrics.clone());
         let handle = ServiceHandle {
             server_addr: self.server_addr,
             command_tx: command_tx.clone(),
@@ -94,6 +95,7 @@ impl ServiceBuilder {
             local_nodes: Default::default(),
             next_local_id: Arc::new(AtomicUsize::new(self.local_node_id_start as usize)),
             metrics: metrics.clone(),
+            metric_builder: Arc::new(Mutex::new(self.metrics)),
         };
 
         rpc::hyparview::register_handlers(&mut self.rpc_server_builder, handle.clone());
@@ -107,6 +109,7 @@ impl ServiceBuilder {
             rpc_client_service,
             handle,
             metrics,
+            removed_nodes_metrics,
         }
     }
 }
@@ -128,6 +131,7 @@ pub struct Service<S, M: MessagePayload> {
     rpc_client_service: RpcClientService,
     handle: ServiceHandle<M>,
     metrics: ServiceMetrics,
+    removed_nodes_metrics: NodeMetrics,
 }
 impl<S, M> Service<S, M>
 where
@@ -187,7 +191,9 @@ where
                 self.metrics.deregistered_nodes.increment();
                 self.handle.local_nodes.update(|nodes| {
                     let mut nodes = (*nodes).clone();
-                    nodes.remove(&node);
+                    if let Some(n) = nodes.remove(&node) {
+                        self.removed_nodes_metrics.add(n.metrics());
+                    }
                     nodes
                 });
             }
@@ -223,6 +229,9 @@ impl<S, M: MessagePayload> Drop for Service<S, M> {
     fn drop(&mut self) {
         let old = self.handle.local_nodes.swap(HashMap::new());
         self.metrics.deregistered_nodes.add_u64(old.len() as u64);
+        for node in old.values() {
+            self.removed_nodes_metrics.add(node.metrics());
+        }
     }
 }
 
@@ -237,6 +246,7 @@ pub struct ServiceHandle<M: MessagePayload> {
     local_nodes: LocalNodes<M>,
     next_local_id: Arc<AtomicUsize>,
     metrics: ServiceMetrics,
+    metric_builder: Arc<Mutex<MetricBuilder>>,
 }
 impl<M: MessagePayload> ServiceHandle<M> {
     /// Returns the address of the RPC server used for inter node communications.
@@ -252,6 +262,14 @@ impl<M: MessagePayload> ServiceHandle<M> {
     /// Returns the identifiers of the nodes registered in the service.
     pub fn local_nodes(&self) -> Vec<LocalNodeId> {
         self.local_nodes.load().keys().cloned().collect()
+    }
+
+    pub(crate) fn metric_builder(&self) -> MetricBuilder {
+        if let Ok(m) = self.metric_builder.lock() {
+            m.clone()
+        } else {
+            MetricBuilder::new()
+        }
     }
 
     pub(crate) fn generate_node_id(&self) -> NodeId {
