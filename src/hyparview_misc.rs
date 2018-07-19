@@ -3,9 +3,13 @@ use rand::StdRng;
 
 use NodeId;
 
-pub type HyparviewAction = hyparview::Action<NodeId>;
+/// HyParView node.
 pub type HyparviewNode = hyparview::Node<NodeId, StdRng>;
+
+/// Options for HyParView nodes.
 pub type HyparviewNodeOptions = hyparview::NodeOptions;
+
+pub type HyparviewAction = hyparview::Action<NodeId>;
 
 pub type HyparviewMessage = hyparview::message::ProtocolMessage<NodeId>;
 pub type DisconnectMessage = hyparview::message::DisconnectMessage<NodeId>;
