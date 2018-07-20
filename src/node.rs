@@ -24,6 +24,7 @@ pub struct NodeBuilder {
     hyparview_options: HyparviewNodeOptions,
     plumtree_options: PlumtreeNodeOptions,
     params: Parameters,
+    local_id: Option<LocalNodeId>, // TODO: delete
 }
 impl NodeBuilder {
     /// Makes a new `NodeBuilder` instance with the default settings.
@@ -39,6 +40,7 @@ impl NodeBuilder {
             hyparview_options: HyparviewNodeOptions::default(),
             plumtree_options: PlumtreeNodeOptions::default(),
             params,
+            local_id: None,
         }
     }
 
@@ -98,11 +100,21 @@ impl NodeBuilder {
         self
     }
 
+    /// Sets the local identifier of the node.
+    pub unsafe fn local_id(&mut self, local_id: LocalNodeId) -> &mut Self {
+        self.local_id = Some(local_id);
+        self
+    }
+
     /// Builds a [`Node`] instance with the specified settings.
     ///
     /// [`Node`]: ./struct.Node.html
     pub fn finish<M: MessagePayload>(&self, service: ServiceHandle<M>) -> Node<M> {
-        let id = service.generate_node_id();
+        let id = if let Some(local_id) = self.local_id {
+            NodeId::new(service.rpc_server_addr(), local_id)
+        } else {
+            service.generate_node_id()
+        };
         let logger = self.logger.new(o!{"node_id" => id.to_string()});
         let metrics = NodeMetrics::new(service.metric_builder());
         let (message_tx, message_rx) = mpsc::channel();
