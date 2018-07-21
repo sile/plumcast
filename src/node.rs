@@ -399,6 +399,10 @@ impl<M: MessagePayload> Stream for Node<M> {
 impl<M: MessagePayload> Drop for Node<M> {
     fn drop(&mut self) {
         self.service.deregister_local_node(self.id().local_id());
+
+        let messages = self.metrics.delivered_messages() - self.metrics.forgot_messages();
+        self.metrics.forgot_messages.add_u64(messages);
+
         self.leave();
     }
 }
