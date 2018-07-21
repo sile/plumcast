@@ -1,6 +1,6 @@
 [package]
 name = "plumcast"
-version = "0.0.2"
+version = "0.0.3"
 authors = ["Takeru Ohta <phjgt308@gmail.com>"]
 description = "A message broadcasting library based on the Plumtree/HyParView algorithms"
 homepage = "https://github.com/sile/plumcast"
