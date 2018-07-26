@@ -423,6 +423,7 @@ impl Encode for ShuffleReplyMessageEncoder {
 pub struct DisconnectMessageDecoder {
     destination: LocalNodeIdDecoder,
     sender: NodeIdDecoder,
+    alive: U8Decoder,
 }
 impl Decode for DisconnectMessageDecoder {
     type Item = (LocalNodeId, DisconnectMessage);
@@ -431,23 +432,26 @@ impl Decode for DisconnectMessageDecoder {
         let mut offset = 0;
         bytecodec_try_decode!(self.destination, offset, buf, eos);
         bytecodec_try_decode!(self.sender, offset, buf, eos);
+        bytecodec_try_decode!(self.alive, offset, buf, eos);
         Ok(offset)
     }
 
     fn finish_decoding(&mut self) -> Result<Self::Item> {
         let destination = track!(self.destination.finish_decoding())?;
         let sender = track!(self.sender.finish_decoding())?;
-        Ok((destination, DisconnectMessage { sender }))
+        let alive = track!(self.alive.finish_decoding())? != 0;
+        Ok((destination, DisconnectMessage { sender, alive }))
     }
 
     fn requiring_bytes(&self) -> ByteCount {
         self.destination
             .requiring_bytes()
             .add_for_decoding(self.sender.requiring_bytes())
+            .add_for_decoding(self.alive.requiring_bytes())
     }
 
     fn is_idle(&self) -> bool {
-        self.sender.is_idle()
+        self.alive.is_idle()
     }
 }
 
@@ -455,6 +459,7 @@ impl Decode for DisconnectMessageDecoder {
 pub struct DisconnectMessageEncoder {
     destination: LocalNodeIdEncoder,
     sender: NodeIdEncoder,
+    alive: U8Encoder,
 }
 impl Encode for DisconnectMessageEncoder {
     type Item = (LocalNodeId, DisconnectMessage);
@@ -463,12 +468,14 @@ impl Encode for DisconnectMessageEncoder {
         let mut offset = 0;
         bytecodec_try_encode!(self.destination, offset, buf, eos);
         bytecodec_try_encode!(self.sender, offset, buf, eos);
+        bytecodec_try_encode!(self.alive, offset, buf, eos);
         Ok(offset)
     }
 
     fn start_encoding(&mut self, item: Self::Item) -> Result<()> {
         track!(self.destination.start_encoding(item.0))?;
         track!(self.sender.start_encoding(item.1.sender))?;
+        track!(self.alive.start_encoding(item.1.alive as u8))?;
         Ok(())
     }
 
@@ -477,11 +484,13 @@ impl Encode for DisconnectMessageEncoder {
     }
 
     fn is_idle(&self) -> bool {
-        self.sender.is_idle()
+        self.alive.is_idle()
     }
 }
 impl SizedEncode for DisconnectMessageEncoder {
     fn exact_requiring_bytes(&self) -> u64 {
-        self.destination.exact_requiring_bytes() + self.sender.exact_requiring_bytes()
+        self.destination.exact_requiring_bytes()
+            + self.sender.exact_requiring_bytes()
+            + self.alive.exact_requiring_bytes()
     }
 }

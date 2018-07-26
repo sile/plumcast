@@ -250,7 +250,7 @@ impl<M: MessagePayload> Node<M> {
                     self.metrics
                         .cannot_send_hyparview_message_errors
                         .increment();
-                    self.hyparview_node.disconnect(&destination);
+                    self.hyparview_node.disconnect(&destination, false);
                 }
             }
             Action::Notify { event } => match event {
@@ -303,7 +303,7 @@ impl<M: MessagePayload> Node<M> {
                         "Cannot send a Plumtree message to {:?}: {}", destination, e
                     );
                     self.metrics.cannot_send_plumtree_message_errors.increment();
-                    self.hyparview_node.disconnect(&destination);
+                    self.hyparview_node.disconnect(&destination, false);
                 }
                 None
             }
@@ -357,7 +357,10 @@ impl<M: MessagePayload> Node<M> {
             self.hyparview_node.active_view()
         );
         for peer in self.hyparview_node.active_view().iter().cloned() {
-            let message = DisconnectMessage { sender: self.id() };
+            let message = DisconnectMessage {
+                sender: self.id(),
+                alive: false,
+            };
             let message = ProtocolMessage::Disconnect(message);
             let message = RpcMessage::Hyparview(message);
             let _ = self.service.send_message(peer, message);

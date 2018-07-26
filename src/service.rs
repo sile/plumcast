@@ -293,7 +293,10 @@ impl<M: MessagePayload> ServiceHandle<M> {
 
             self.metrics.destination_unknown_messages.increment();
             let missing = NodeId::new(self.server_addr, id);
-            let message = DisconnectMessage { sender: missing };
+            let message = DisconnectMessage {
+                sender: missing,
+                alive: false,
+            };
             let message = ProtocolMessage::Disconnect(message);
             let _ = self.send_message(sender.clone(), RpcMessage::Hyparview(message));
             None
