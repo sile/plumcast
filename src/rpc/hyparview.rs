@@ -106,10 +106,8 @@ pub fn neighbor_cast(
     service: &ClientServiceHandle,
 ) -> Result<()> {
     let mut client = NeighborCast::client(&service);
-    if m.high_priority {
-        client.options_mut().force_wakeup = true;
-        client.options_mut().priority = 100;
-    }
+    client.options_mut().force_wakeup = true;
+    client.options_mut().priority = 100;
     track!(client.cast(peer.address(), (peer.local_id(), m)))?;
     Ok(())
 }

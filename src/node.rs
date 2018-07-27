@@ -1,6 +1,8 @@
 use fibers::sync::mpsc;
-use futures::{Async, Poll, Stream};
+use fibers::time::timer::{self, Timeout};
+use futures::{Async, Future, Poll, Stream};
 use plumtree::message::Message as PlumtreeAppMessage;
+use plumtree::time::{Clock, NodeTime};
 use rand::{self, Rng, SeedableRng, StdRng};
 use slog::{Discard, Logger};
 use std::fmt;
@@ -10,9 +12,7 @@ use hyparview_misc::{HyparviewAction, HyparviewNode, HyparviewNodeOptions};
 use metrics::NodeMetrics;
 use plumtree_misc::{PlumtreeAction, PlumtreeNode, PlumtreeNodeOptions};
 use rpc::RpcMessage;
-use {
-    Clock, Error, ErrorKind, LocalNodeId, Message, MessageId, MessagePayload, NodeId, ServiceHandle,
-};
+use {Error, ErrorKind, LocalNodeId, Message, MessageId, MessagePayload, NodeId, ServiceHandle};
 
 /// The builder of [`Node`].
 ///
@@ -20,7 +20,6 @@ use {
 #[derive(Debug, Clone)]
 pub struct NodeBuilder {
     logger: Logger,
-    tick_interval: Duration,
     hyparview_options: HyparviewNodeOptions,
     plumtree_options: PlumtreeNodeOptions,
     params: Parameters,
@@ -30,13 +29,13 @@ impl NodeBuilder {
     /// Makes a new `NodeBuilder` instance with the default settings.
     pub fn new() -> Self {
         let params = Parameters {
-            hyparview_shuffle_interval_ticks: 601,
-            hyparview_sync_active_view_interval_ticks: 307,
-            hyparview_fill_active_view_interval_ticks: 101,
+            tick_interval: Duration::from_millis(200),
+            hyparview_shuffle_interval: Duration::from_secs(300),
+            hyparview_sync_active_view_interval: Duration::from_secs(60),
+            hyparview_fill_active_view_interval: Duration::from_secs(30),
         };
         NodeBuilder {
             logger: Logger::root(Discard, o!()),
-            tick_interval: Duration::from_millis(100),
             hyparview_options: HyparviewNodeOptions::default(),
             plumtree_options: PlumtreeNodeOptions::default(),
             params,
@@ -54,33 +53,33 @@ impl NodeBuilder {
 
     /// Sets the unit of the node local [`Clock`].
     ///
-    /// The default value is `Duration::from_millis(100)`.
+    /// The default value is `Duration::from_millis(200)`.
     pub fn tick_interval(&mut self, interval: Duration) -> &mut Self {
-        self.tick_interval = interval;
+        self.params.tick_interval = interval;
         self
     }
 
-    /// Sets the execution interval of `HyparviewNode::shuffle_passive_view()` method in ticks.
+    /// Sets the execution interval of `HyparviewNode::shuffle_passive_view()` method.
     ///
-    /// The default value is `601`.
-    pub fn hyparview_shuffle_interval_ticks(&mut self, ticks: u64) -> &mut Self {
-        self.params.hyparview_shuffle_interval_ticks = ticks;
+    /// The default value is `Duration::from_secs(300)`.
+    pub fn hyparview_shuffle_interval(&mut self, interval: Duration) -> &mut Self {
+        self.params.hyparview_shuffle_interval = interval;
         self
     }
 
-    /// Sets the execution interval of `HyparviewNode::shuffle_passive_view()` method in ticks.
+    /// Sets the execution interval of `HyparviewNode::shuffle_passive_view()` method.
     ///
-    /// The default value is `307`.
-    pub fn hyparview_sync_active_view_interval_ticks(&mut self, ticks: u64) -> &mut Self {
-        self.params.hyparview_sync_active_view_interval_ticks = ticks;
+    /// The default value is `Duration::from_secs(60)`.
+    pub fn hyparview_sync_active_view_interval(&mut self, interval: Duration) -> &mut Self {
+        self.params.hyparview_sync_active_view_interval = interval;
         self
     }
 
-    /// Sets the execution interval of `HyparviewNode::shuffle_passive_view()` method in ticks.
+    /// Sets the execution interval of `HyparviewNode::shuffle_passive_view()` method.
     ///
-    /// The default value is `101`.
-    pub fn hyparview_fill_active_view_interval_ticks(&mut self, ticks: u64) -> &mut Self {
-        self.params.hyparview_fill_active_view_interval_ticks = ticks;
+    /// The default value is `Duration::from_secs(30)`.
+    pub fn hyparview_fill_active_view_interval(&mut self, interval: Duration) -> &mut Self {
+        self.params.hyparview_fill_active_view_interval = interval;
         self
     }
 
@@ -125,14 +124,25 @@ impl NodeBuilder {
         };
         let rng = StdRng::from_seed(rand::thread_rng().gen());
         service.register_local_node(handle);
+
+        let plumtree_node = PlumtreeNode::with_options(id, self.plumtree_options.clone());
+        let now = plumtree_node.clock().now();
+        let hyparview_shuffle_time = now + gen_interval(self.params.hyparview_shuffle_interval);
+        let hyparview_sync_active_view_time =
+            now + gen_interval(self.params.hyparview_sync_active_view_interval);
+        let hyparview_fill_active_view_time =
+            now + gen_interval(self.params.hyparview_fill_active_view_interval);
         Node {
             logger,
             service,
             message_rx,
             hyparview_node: HyparviewNode::with_options(id, rng, self.hyparview_options.clone()),
-            plumtree_node: PlumtreeNode::with_options(id, self.plumtree_options.clone()),
+            plumtree_node,
             message_seqno: 0,
-            clock: Clock::new(self.tick_interval),
+            hyparview_shuffle_time,
+            hyparview_sync_active_view_time,
+            hyparview_fill_active_view_time,
+            tick_timeout: timer::timeout(self.params.tick_interval),
             params: self.params.clone(),
             metrics,
         }
@@ -154,7 +164,10 @@ pub struct Node<M: MessagePayload> {
     hyparview_node: HyparviewNode,
     plumtree_node: PlumtreeNode<M>,
     message_seqno: u64,
-    clock: Clock,
+    hyparview_shuffle_time: NodeTime,
+    hyparview_sync_active_view_time: NodeTime,
+    hyparview_fill_active_view_time: NodeTime,
+    tick_timeout: Timeout,
     params: Parameters,
     metrics: NodeMetrics,
 }
@@ -221,7 +234,7 @@ impl<M: MessagePayload> Node<M> {
 
     /// Returns the clock of the node.
     pub fn clock(&self) -> &Clock {
-        &self.clock
+        self.plumtree_node.clock()
     }
 
     /// Returns the metrics of the service.
@@ -334,17 +347,25 @@ impl<M: MessagePayload> Node<M> {
     }
 
     fn handle_tick(&mut self) {
-        self.plumtree_node.tick();
+        self.plumtree_node
+            .clock_mut()
+            .tick(self.params.tick_interval);
 
-        let now = self.clock.ticks();
-        if now % self.params.hyparview_shuffle_interval_ticks == 0 {
+        let now = self.plumtree_node.clock().now();
+        if now >= self.hyparview_shuffle_time {
             self.hyparview_node.shuffle_passive_view();
+            self.hyparview_shuffle_time =
+                now + gen_interval(self.params.hyparview_shuffle_interval);
         }
-        if now % self.params.hyparview_sync_active_view_interval_ticks == 0 {
+        if now >= self.hyparview_sync_active_view_time {
             self.hyparview_node.sync_active_view();
+            self.hyparview_sync_active_view_time =
+                now + gen_interval(self.params.hyparview_sync_active_view_interval);
         }
-        if now % self.params.hyparview_fill_active_view_interval_ticks == 0 {
+        if now >= self.hyparview_fill_active_view_time {
             self.hyparview_node.fill_active_view();
+            self.hyparview_fill_active_view_time =
+                now + gen_interval(self.params.hyparview_fill_active_view_interval);
         }
     }
 
@@ -372,8 +393,9 @@ impl<M: MessagePayload> Stream for Node<M> {
     type Error = Error;
 
     fn poll(&mut self) -> Poll<Option<Self::Item>, Self::Error> {
-        while track!(self.clock.poll())?.is_ready() {
+        while track!(self.tick_timeout.poll().map_err(Error::from))?.is_ready() {
             self.handle_tick();
+            self.tick_timeout = timer::timeout(self.params.tick_interval);
         }
 
         let mut did_something = true;
@@ -437,7 +459,14 @@ impl<M: MessagePayload> NodeHandle<M> {
 
 #[derive(Debug, Clone)]
 struct Parameters {
-    hyparview_shuffle_interval_ticks: u64,
-    hyparview_sync_active_view_interval_ticks: u64,
-    hyparview_fill_active_view_interval_ticks: u64,
+    tick_interval: Duration,
+    hyparview_shuffle_interval: Duration,
+    hyparview_sync_active_view_interval: Duration,
+    hyparview_fill_active_view_interval: Duration,
+}
+
+fn gen_interval(base: Duration) -> Duration {
+    let millis = base.as_secs() * 1000 + u64::from(base.subsec_millis());
+    let jitter = rand::random::<u64>() % (millis / 10);
+    base + Duration::from_millis(jitter)
 }
