@@ -65,6 +65,7 @@ mod rpc;
 mod service;
 
 pub mod metrics;
+pub mod misc;
 
 /// This crate specific `Result` type.
 pub type Result<T> = std::result::Result<T, Error>;

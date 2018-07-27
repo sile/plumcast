@@ -16,6 +16,7 @@ use std::sync::atomic::{AtomicUsize, Ordering};
 use std::sync::{Arc, Mutex};
 
 use metrics::{NodeMetrics, ServiceMetrics};
+use misc::ArcSpawn;
 use node::NodeHandle;
 use rpc::{self, RpcMessage};
 use {Error, ErrorKind, LocalNodeId, MessagePayload, NodeId, Result};
@@ -78,11 +79,12 @@ impl ServiceBuilder {
     /// Builds a [`Service`] with the given settings.
     ///
     /// [`Service`]: ./struct.Service.html
-    pub fn finish<S, M>(mut self, spawner: S) -> Service<S, M>
+    pub fn finish<S, M>(mut self, spawner: S) -> Service<M>
     where
-        S: Spawn + Clone + Send + 'static,
+        S: Spawn + Send + Sync + 'static,
         M: MessagePayload,
     {
+        let spawner = ArcSpawn::new(spawner);
         let (command_tx, command_rx) = mpsc::channel();
         let rpc_client_service = self.rpc_client_service_builder.finish(spawner.clone());
 
@@ -124,18 +126,17 @@ impl ServiceBuilder {
 /// [`Node`]: ./struct.Node.html
 #[derive(Debug)]
 #[must_use = "futures do nothing unless polled"]
-pub struct Service<S, M: MessagePayload> {
+pub struct Service<M: MessagePayload> {
     logger: Logger,
     command_rx: mpsc::Receiver<Command<M>>, // NOTE: infinite stream
-    rpc_server: RpcServer<S>,
+    rpc_server: RpcServer<ArcSpawn>,
     rpc_client_service: RpcClientService,
     handle: ServiceHandle<M>,
     metrics: ServiceMetrics,
     removed_nodes_metrics: NodeMetrics,
 }
-impl<S, M> Service<S, M>
+impl<M> Service<M>
 where
-    S: Spawn + Clone + Send + 'static,
     M: MessagePayload,
 {
     /// Makes a new `Service` instance with the default settings.
@@ -143,7 +144,10 @@ where
     /// If you want to customize settings, please use [`ServiceBuilder`] instead.
     ///
     /// [`ServiceBuilder`]: ./struct.ServiceBuilder.html
-    pub fn new(rpc_server_bind_addr: SocketAddr, spawner: S) -> Self {
+    pub fn new<S>(rpc_server_bind_addr: SocketAddr, spawner: S) -> Self
+    where
+        S: Spawn + Send + Sync + 'static,
+    {
         ServiceBuilder::new(rpc_server_bind_addr).finish(spawner)
     }
 
@@ -153,7 +157,7 @@ where
     }
 
     /// Returns a reference to the RPC server of the service.
-    pub fn rpc_server(&self) -> &RpcServer<S> {
+    pub fn rpc_server(&self) -> &RpcServer<ArcSpawn> {
         &self.rpc_server
     }
 
@@ -201,9 +205,8 @@ where
         Ok(())
     }
 }
-impl<S, M> Future for Service<S, M>
+impl<M> Future for Service<M>
 where
-    S: Spawn + Clone + Send + 'static,
     M: MessagePayload,
 {
     type Item = ();
@@ -225,7 +228,7 @@ where
         Ok(Async::NotReady)
     }
 }
-impl<S, M: MessagePayload> Drop for Service<S, M> {
+impl<M: MessagePayload> Drop for Service<M> {
     fn drop(&mut self) {
         let old = self.handle.local_nodes.swap(HashMap::new());
         self.metrics.deregistered_nodes.add_u64(old.len() as u64);
