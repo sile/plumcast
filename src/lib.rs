@@ -58,14 +58,15 @@ mod codec;
 mod error;
 mod hyparview_misc;
 mod message;
-mod node;
 mod node_id;
+mod node_id_generator;
 mod plumtree_misc;
 mod rpc;
 mod service;
 
 pub mod metrics;
 pub mod misc;
+pub mod node;
 
 /// This crate specific `Result` type.
 pub type Result<T> = std::result::Result<T, Error>;

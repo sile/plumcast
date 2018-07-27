@@ -1,3 +1,6 @@
+//! [`Node`] and related components.
+//!
+//! [`Node`]: ./node/struct.Node.html
 use fibers::sync::mpsc;
 use fibers::time::timer::{self, Timeout};
 use futures::{Async, Future, Poll, Stream};
@@ -13,6 +16,8 @@ use metrics::NodeMetrics;
 use plumtree_misc::{PlumtreeAction, PlumtreeNode, PlumtreeNodeOptions};
 use rpc::RpcMessage;
 use {Error, ErrorKind, LocalNodeId, Message, MessageId, MessagePayload, NodeId, ServiceHandle};
+
+pub use node_id_generator::GenerateLocalNodeId;
 
 /// The builder of [`Node`].
 ///
@@ -433,7 +438,7 @@ impl<M: MessagePayload> Drop for Node<M> {
 }
 
 #[derive(Clone)]
-pub struct NodeHandle<M: MessagePayload> {
+pub(crate) struct NodeHandle<M: MessagePayload> {
     local_id: LocalNodeId,
     message_tx: mpsc::Sender<RpcMessage<M>>,
     metrics: NodeMetrics,
@@ -444,15 +449,15 @@ impl<M: MessagePayload> fmt::Debug for NodeHandle<M> {
     }
 }
 impl<M: MessagePayload> NodeHandle<M> {
-    pub fn local_id(&self) -> LocalNodeId {
+    pub(crate) fn local_id(&self) -> LocalNodeId {
         self.local_id
     }
 
-    pub fn send_rpc_message(&self, message: RpcMessage<M>) {
+    pub(crate) fn send_rpc_message(&self, message: RpcMessage<M>) {
         let _ = self.message_tx.send(message);
     }
 
-    pub fn metrics(&self) -> &NodeMetrics {
+    pub(crate) fn metrics(&self) -> &NodeMetrics {
         &self.metrics
     }
 }
