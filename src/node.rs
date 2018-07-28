@@ -17,7 +17,9 @@ use plumtree_misc::{PlumtreeAction, PlumtreeNode, PlumtreeNodeOptions};
 use rpc::RpcMessage;
 use {Error, ErrorKind, LocalNodeId, Message, MessageId, MessagePayload, NodeId, ServiceHandle};
 
-pub use node_id_generator::GenerateLocalNodeId;
+pub use node_id_generator::{
+    GenerateLocalNodeId, SerialLocalNodeIdGenerator, UnixtimeLocalNodeIdGenerator,
+};
 
 /// The builder of [`Node`].
 ///

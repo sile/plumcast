@@ -1,3 +1,6 @@
+//! [`Service`] and related components.
+//!
+//! [`Service`]: ./struct.Service.html
 use atomic_immut::AtomicImmut;
 use fibers::sync::mpsc;
 use fibers::Spawn;

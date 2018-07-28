@@ -62,11 +62,11 @@ mod node_id;
 mod node_id_generator;
 mod plumtree_misc;
 mod rpc;
-mod service;
 
 pub mod metrics;
 pub mod misc;
 pub mod node;
+pub mod service;
 
 /// This crate specific `Result` type.
 pub type Result<T> = std::result::Result<T, Error>;
