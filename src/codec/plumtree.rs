@@ -9,8 +9,9 @@ use std::fmt;
 use std::marker::PhantomData;
 
 use super::node::{LocalNodeIdDecoder, LocalNodeIdEncoder, NodeIdDecoder, NodeIdEncoder};
-use plumtree_misc::{GossipMessage, GraftMessage, IhaveMessage, Message, PruneMessage};
-use {LocalNodeId, MessageId, MessagePayload};
+use message::{MessageId, MessagePayload};
+use misc::{GossipMessage, GraftMessage, IhaveMessage, PlumtreeAppMessage, PruneMessage};
+use node::LocalNodeId;
 
 pub struct GossipMessageDecoder<M: MessagePayload> {
     destination: LocalNodeIdDecoder,
@@ -104,7 +105,7 @@ where
     }
 }
 impl<M: MessagePayload> Decode for MessageDecoder<M> {
-    type Item = Message<M>;
+    type Item = PlumtreeAppMessage<M>;
 
     fn decode(&mut self, buf: &[u8], eos: Eos) -> Result<usize> {
         let mut offset = 0;
@@ -116,7 +117,7 @@ impl<M: MessagePayload> Decode for MessageDecoder<M> {
     fn finish_decoding(&mut self) -> Result<Self::Item> {
         let id = track!(self.id.finish_decoding())?;
         let payload = track!(self.payload.finish_decoding())?;
-        Ok(Message { id, payload })
+        Ok(PlumtreeAppMessage { id, payload })
     }
 
     fn requiring_bytes(&self) -> ByteCount {
@@ -298,7 +299,7 @@ where
     }
 }
 impl<M: MessagePayload> Encode for MessageEncoder<M> {
-    type Item = Message<M>;
+    type Item = PlumtreeAppMessage<M>;
 
     fn encode(&mut self, buf: &mut [u8], eos: Eos) -> Result<usize> {
         let mut offset = 0;

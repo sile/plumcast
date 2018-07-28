@@ -9,12 +9,14 @@ use codec::hyparview::{
     NeighborMessageEncoder, ShuffleMessageDecoder, ShuffleMessageEncoder,
     ShuffleReplyMessageDecoder, ShuffleReplyMessageEncoder,
 };
-use hyparview_misc::{
+use message::MessagePayload;
+use misc::{
     DisconnectMessage, ForwardJoinMessage, JoinMessage, NeighborMessage, ShuffleMessage,
     ShuffleReplyMessage,
 };
+use node::{LocalNodeId, NodeId};
 use service::ServiceHandle;
-use {LocalNodeId, MessagePayload, NodeId, Result};
+use Result;
 
 pub fn register_handlers<M: MessagePayload>(rpc: &mut ServerBuilder, service: &ServiceHandle<M>) {
     rpc.add_cast_handler(JoinHandler(service.clone()));

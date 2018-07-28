@@ -11,12 +11,17 @@ use slog::{Discard, Logger};
 use std::fmt;
 use std::time::Duration;
 
-use hyparview_misc::{HyparviewAction, HyparviewNode, HyparviewNodeOptions};
+use message::{Message, MessageId, MessagePayload};
 use metrics::NodeMetrics;
-use plumtree_misc::{PlumtreeAction, PlumtreeNode, PlumtreeNodeOptions};
+use misc::{
+    HyparviewAction, HyparviewNode, HyparviewNodeOptions, PlumtreeAction, PlumtreeNode,
+    PlumtreeNodeOptions,
+};
 use rpc::RpcMessage;
-use {Error, ErrorKind, LocalNodeId, Message, MessageId, MessagePayload, NodeId, ServiceHandle};
+use service::ServiceHandle;
+use {Error, ErrorKind};
 
+pub use node_id::{LocalNodeId, NodeId};
 pub use node_id_generator::{
     GenerateLocalNodeId, SerialLocalNodeIdGenerator, UnixtimeLocalNodeIdGenerator,
 };

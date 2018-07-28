@@ -1,12 +1,15 @@
+//! [`Message`] and related components.
+//!
+//! [`Message`]: ./struct.Message.html
 use bytecodec::bytes::{BytesEncoder, RemainingBytesDecoder, Utf8Decoder, Utf8Encoder};
 use bytecodec::{Decode, Encode};
 
-use plumtree_misc::Message as InnerMessage;
-use NodeId;
+use misc::PlumtreeAppMessage;
+use node::NodeId;
 
 /// Broadcasted application message.
 #[derive(Debug, Clone)]
-pub struct Message<T: MessagePayload>(InnerMessage<T>);
+pub struct Message<T: MessagePayload>(PlumtreeAppMessage<T>);
 impl<T: MessagePayload> Message<T> {
     /// Returns a reference to the identifier of the message.
     pub fn id(&self) -> &MessageId {
@@ -28,7 +31,7 @@ impl<T: MessagePayload> Message<T> {
         self.0.payload
     }
 
-    pub(crate) fn new(message: InnerMessage<T>) -> Self {
+    pub(crate) fn new(message: PlumtreeAppMessage<T>) -> Self {
         Message(message)
     }
 }
@@ -46,7 +49,7 @@ impl<T: MessagePayload> Message<T> {
 /// Practically confliction of identifiers is extremely rare
 /// even if OS processes are frequently restarted.
 ///
-/// [`NodeId`]: ./struct.NodeId.html
+/// [`NodeId`]: ../node/struct.NodeId.html
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub struct MessageId {
     node: NodeId,

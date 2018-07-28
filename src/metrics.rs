@@ -8,7 +8,7 @@ use prometrics::metrics::{Counter, MetricBuilder};
 
 /// Metrics of a [`Service`].
 ///
-/// [`Service`]: ../struct.Service.html
+/// [`Service`]: ../service/struct.Service.html
 #[derive(Debug, Clone)]
 pub struct ServiceMetrics {
     pub(crate) registered_nodes: Counter,
@@ -55,7 +55,7 @@ impl ServiceMetrics {
 
 /// Metrics of a [`Node`].
 ///
-/// [`Node`]: ../struct.Node.html
+/// [`Node`]: ../node/struct.Node.html
 #[derive(Debug, Clone)]
 pub struct NodeMetrics {
     pub(crate) broadcasted_messages: Counter,

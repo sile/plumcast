@@ -1,6 +1,5 @@
-use hyparview_misc::HyparviewMessage;
-use plumtree_misc::PlumtreeMessage;
-use MessagePayload;
+use message::MessagePayload;
+use misc::{HyparviewMessage, PlumtreeMessage};
 
 pub mod hyparview;
 pub mod plumtree;

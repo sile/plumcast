@@ -47,22 +47,14 @@ extern crate slog;
 extern crate trackable;
 
 pub use error::{Error, ErrorKind};
-pub use hyparview_misc::{HyparviewNode, HyparviewNodeOptions};
-pub use message::{Message, MessageId, MessagePayload};
-pub use node::{Node, NodeBuilder};
-pub use node_id::{LocalNodeId, NodeId};
-pub use plumtree_misc::{PlumtreeNode, PlumtreeNodeOptions, PlumtreeSystem};
-pub use service::{Service, ServiceBuilder, ServiceHandle};
 
 mod codec;
 mod error;
-mod hyparview_misc;
-mod message;
 mod node_id;
 mod node_id_generator;
-mod plumtree_misc;
 mod rpc;
 
+pub mod message;
 pub mod metrics;
 pub mod misc;
 pub mod node;

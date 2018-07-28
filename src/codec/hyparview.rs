@@ -5,11 +5,11 @@ use hyparview::TimeToLive;
 use std;
 
 use super::node::{LocalNodeIdDecoder, LocalNodeIdEncoder, NodeIdDecoder, NodeIdEncoder};
-use hyparview_misc::{
+use misc::{
     DisconnectMessage, ForwardJoinMessage, JoinMessage, NeighborMessage, ShuffleMessage,
     ShuffleReplyMessage,
 };
-use {LocalNodeId, NodeId};
+use node::{LocalNodeId, NodeId};
 
 #[derive(Debug, Default)]
 pub struct JoinMessageDecoder {

@@ -18,11 +18,12 @@ use std::net::SocketAddr;
 use std::sync::atomic::{AtomicUsize, Ordering};
 use std::sync::{Arc, Mutex};
 
+use message::MessagePayload;
 use metrics::{NodeMetrics, ServiceMetrics};
 use misc::ArcSpawn;
-use node::NodeHandle;
+use node::{LocalNodeId, NodeHandle, NodeId};
 use rpc::{self, RpcMessage};
-use {Error, ErrorKind, LocalNodeId, MessagePayload, NodeId, Result};
+use {Error, ErrorKind, Result};
 
 type LocalNodes<M> = Arc<AtomicImmut<HashMap<LocalNodeId, NodeHandle<M>>>>;
 
@@ -126,7 +127,7 @@ impl ServiceBuilder {
 /// - [`Node`] registry
 ///
 /// [`Future`]: https://docs.rs/futures/0.1/futures/future/trait.Future.html
-/// [`Node`]: ./struct.Node.html
+/// [`Node`]: ../node/struct.Node.html
 #[derive(Debug)]
 #[must_use = "futures do nothing unless polled"]
 pub struct Service<M: MessagePayload> {

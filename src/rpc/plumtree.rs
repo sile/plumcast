@@ -9,9 +9,11 @@ use codec::plumtree::{
     GraftOptimizeMessageDecoder, GraftOptimizeMessageEncoder, IhaveMessageDecoder,
     IhaveMessageEncoder, PruneMessageDecoder, PruneMessageEncoder,
 };
-use plumtree_misc::{GossipMessage, GraftMessage, IhaveMessage, PruneMessage};
+use message::MessagePayload;
+use misc::{GossipMessage, GraftMessage, IhaveMessage, PruneMessage};
+use node::{LocalNodeId, NodeId};
 use service::ServiceHandle;
-use {LocalNodeId, MessagePayload, NodeId, Result};
+use Result;
 
 const MAX_QUEUE_LEN: u64 = 4096; // FIXME: parameterize
 

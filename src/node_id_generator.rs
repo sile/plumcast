@@ -1,6 +1,6 @@
 use std::time::UNIX_EPOCH;
 
-use LocalNodeId;
+use node::LocalNodeId;
 
 /// This trait allows for generating the identifiers of the local nodes that belong to a [`Service`].
 ///
