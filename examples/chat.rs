@@ -13,8 +13,8 @@ use clap::Arg;
 use fibers::sync::mpsc;
 use fibers::{Executor, Spawn, ThreadPoolExecutor};
 use futures::{Async, Future, Poll, Stream};
-use plumcast::ServiceBuilder;
-use plumcast::{LocalNodeId, Node, NodeBuilder, NodeId};
+use plumcast::node::{LocalNodeId, Node, NodeBuilder, NodeId, SerialLocalNodeIdGenerator};
+use plumcast::service::ServiceBuilder;
 use sloggers::terminal::{Destination, TerminalLoggerBuilder};
 use sloggers::Build;
 use std::net::SocketAddr;
@@ -49,8 +49,7 @@ fn main() -> Result<(), MainError> {
     let executor = track_any_err!(ThreadPoolExecutor::new())?;
     let service = ServiceBuilder::new(addr)
         .logger(logger.clone())
-        .local_node_id_start(0)
-        .finish(executor.handle());
+        .finish(executor.handle(), SerialLocalNodeIdGenerator::new());
 
     let mut node = NodeBuilder::new().logger(logger).finish(service.handle());
     if let Some(contact) = matches.value_of("CONTACT_SERVER") {

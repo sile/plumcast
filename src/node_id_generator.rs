@@ -1,3 +1,6 @@
+use std::fmt;
+use std::sync::atomic::{AtomicUsize, Ordering};
+use std::sync::Arc;
 use std::time::UNIX_EPOCH;
 
 use node::LocalNodeId;
@@ -5,14 +8,29 @@ use node::LocalNodeId;
 /// This trait allows for generating the identifiers of the local nodes that belong to a [`Service`].
 ///
 /// [`Service`]: ../service/struct.Service.html
-pub trait GenerateLocalNodeId {
+pub trait GenerateLocalNodeId: Send + Sync + 'static {
     /// Generates an identifier that will be assigned to a new local node that belongs to a [`Service`].
     ///
-    /// If the resulting identifier conflicts with the identifier of an alive node,
-    /// the [`Service`] will recall this method until it generates an unique identifier.
-    ///
     /// [`Service`]: ../service/struct.Service.html
-    fn generate_local_node_id(&mut self) -> LocalNodeId;
+    fn generate_local_node_id(&self) -> LocalNodeId;
+}
+
+#[derive(Clone)]
+pub(crate) struct ArcLocalNodeIdGenerator(Arc<GenerateLocalNodeId>);
+impl ArcLocalNodeIdGenerator {
+    pub(crate) fn new<T: GenerateLocalNodeId>(inner: T) -> Self {
+        ArcLocalNodeIdGenerator(Arc::new(inner))
+    }
+}
+impl fmt::Debug for ArcLocalNodeIdGenerator {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        write!(f, "ArcLocalNodeIdGenerator(_)")
+    }
+}
+impl GenerateLocalNodeId for ArcLocalNodeIdGenerator {
+    fn generate_local_node_id(&self) -> LocalNodeId {
+        self.0.generate_local_node_id()
+    }
 }
 
 /// An implementation of [`GenerateLocalNodeId`] that generates serial number identifiers.
@@ -20,7 +38,7 @@ pub trait GenerateLocalNodeId {
 /// [`GenerateLocalNodeId`]: ./trait.GenerateLocalNodeId.html
 #[derive(Debug, Default)]
 pub struct SerialLocalNodeIdGenerator {
-    next_id: u64,
+    next_id: AtomicUsize,
 }
 impl SerialLocalNodeIdGenerator {
     /// Makes a new `SerialLocalNodeIdGenerator` instance.
@@ -53,15 +71,14 @@ impl SerialLocalNodeIdGenerator {
     /// ```
     pub fn with_offset(start_number: u64) -> Self {
         SerialLocalNodeIdGenerator {
-            next_id: start_number,
+            next_id: AtomicUsize::new(start_number as usize),
         }
     }
 }
 impl GenerateLocalNodeId for SerialLocalNodeIdGenerator {
-    fn generate_local_node_id(&mut self) -> LocalNodeId {
-        let id = self.next_id;
-        self.next_id = self.next_id.wrapping_add(1);
-        LocalNodeId::new(id)
+    fn generate_local_node_id(&self) -> LocalNodeId {
+        let id = self.next_id.fetch_add(1, Ordering::SeqCst);
+        LocalNodeId::new(id as u64)
     }
 }
 
@@ -69,13 +86,23 @@ impl GenerateLocalNodeId for SerialLocalNodeIdGenerator {
 ///
 /// [`GenerateLocalNodeId`]: ./trait.GenerateLocalNodeId.html
 #[derive(Debug, Default)]
-pub struct UnixtimeLocalNodeIdGenerator;
+pub struct UnixtimeLocalNodeIdGenerator {
+    nanos: AtomicUsize,
+}
+impl UnixtimeLocalNodeIdGenerator {
+    /// Makes a new `UnixtimeLocalNodeIdGenerator` instance.
+    pub fn new() -> Self {
+        Self::default()
+    }
+}
 impl GenerateLocalNodeId for UnixtimeLocalNodeIdGenerator {
-    fn generate_local_node_id(&mut self) -> LocalNodeId {
+    fn generate_local_node_id(&self) -> LocalNodeId {
         match UNIX_EPOCH.elapsed() {
             Err(e) => panic!("{}", e),
             Ok(d) => {
-                let id = d.as_secs() * 1_000_000_000 + u64::from(d.subsec_nanos());
+                let nanos = self.nanos.fetch_add(1, Ordering::SeqCst) as u64 % 1_000;
+                let micros = u64::from(d.subsec_micros()) * 1_000;
+                let id = d.as_secs() * 1_000_000_000 + micros + nanos;
                 LocalNodeId::new(id)
             }
         }
@@ -90,12 +117,12 @@ mod tests {
 
     #[test]
     fn serial_id_generator_works() {
-        let mut generator = SerialLocalNodeIdGenerator::new();
+        let generator = SerialLocalNodeIdGenerator::new();
         assert_eq!(generator.generate_local_node_id().value(), 0);
         assert_eq!(generator.generate_local_node_id().value(), 1);
         assert_eq!(generator.generate_local_node_id().value(), 2);
 
-        let mut generator = SerialLocalNodeIdGenerator::with_offset(std::u64::MAX);
+        let generator = SerialLocalNodeIdGenerator::with_offset(std::u64::MAX);
         assert_eq!(generator.generate_local_node_id().value(), std::u64::MAX);
         assert_eq!(generator.generate_local_node_id().value(), 0);
         assert_eq!(generator.generate_local_node_id().value(), 1);
@@ -103,7 +130,7 @@ mod tests {
 
     #[test]
     fn unixtime_id_generator_works() {
-        let mut generator = UnixtimeLocalNodeIdGenerator;
+        let generator = UnixtimeLocalNodeIdGenerator::new();
         let id0 = generator.generate_local_node_id();
         std::thread::sleep(std::time::Duration::from_millis(1));
         let id1 = generator.generate_local_node_id();

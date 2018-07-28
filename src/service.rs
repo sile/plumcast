@@ -11,17 +11,16 @@ use fibers_rpc::client::{
 use fibers_rpc::server::{Server as RpcServer, ServerBuilder as RpcServerBuilder};
 use futures::{Async, Future, Poll, Stream};
 use prometrics::metrics::MetricBuilder;
-use rand::{self, Rng};
 use slog::{Discard, Logger};
 use std::collections::HashMap;
 use std::net::SocketAddr;
-use std::sync::atomic::{AtomicUsize, Ordering};
 use std::sync::{Arc, Mutex};
 
 use message::MessagePayload;
 use metrics::{NodeMetrics, ServiceMetrics};
 use misc::ArcSpawn;
-use node::{LocalNodeId, NodeHandle, NodeId};
+use node::{GenerateLocalNodeId, LocalNodeId, NodeHandle, NodeId};
+use node_id_generator::ArcLocalNodeIdGenerator;
 use rpc::{self, RpcMessage};
 use {Error, ErrorKind, Result};
 
@@ -37,7 +36,6 @@ pub struct ServiceBuilder {
     rpc_server_builder: RpcServerBuilder,
     rpc_client_service_builder: RpcClientServiceBuilder,
     metrics: MetricBuilder,
-    local_node_id_start: u64,
 }
 impl ServiceBuilder {
     /// Makes a new `ServiceBuilder` instance with the default settings.
@@ -48,7 +46,6 @@ impl ServiceBuilder {
             rpc_server_builder: RpcServerBuilder::new(rpc_server_bind_addr),
             rpc_client_service_builder: RpcClientServiceBuilder::new(),
             metrics: MetricBuilder::new(),
-            local_node_id_start: rand::thread_rng().gen(),
         }
     }
 
@@ -70,23 +67,14 @@ impl ServiceBuilder {
         self
     }
 
-    /// Sets the value of the identifier of the first local node associated with the service.
-    ///
-    /// Local node identifiers are increased incrementally start from the specified value.
-    ///
-    /// The default value is `rand::thread_rng().gen()`.
-    pub fn local_node_id_start(mut self, n: u64) -> Self {
-        self.local_node_id_start = n;
-        self
-    }
-
     /// Builds a [`Service`] with the given settings.
     ///
     /// [`Service`]: ./struct.Service.html
-    pub fn finish<S, M>(mut self, spawner: S) -> Service<M>
+    pub fn finish<S, M, G>(mut self, spawner: S, local_id_gen: G) -> Service<M>
     where
         S: Spawn + Send + Sync + 'static,
         M: MessagePayload,
+        G: GenerateLocalNodeId,
     {
         let spawner = ArcSpawn::new(spawner);
         let (command_tx, command_rx) = mpsc::channel();
@@ -99,7 +87,7 @@ impl ServiceBuilder {
             command_tx: command_tx.clone(),
             rpc_service: rpc_client_service.handle(),
             local_nodes: Default::default(),
-            next_local_id: Arc::new(AtomicUsize::new(self.local_node_id_start as usize)),
+            local_id_gen: ArcLocalNodeIdGenerator::new(local_id_gen),
             metrics: metrics.clone(),
             metric_builder: Arc::new(Mutex::new(self.metrics)),
         };
@@ -148,11 +136,12 @@ where
     /// If you want to customize settings, please use [`ServiceBuilder`] instead.
     ///
     /// [`ServiceBuilder`]: ./struct.ServiceBuilder.html
-    pub fn new<S>(rpc_server_bind_addr: SocketAddr, spawner: S) -> Self
+    pub fn new<S, G>(rpc_server_bind_addr: SocketAddr, spawner: S, local_id_gen: G) -> Self
     where
         S: Spawn + Send + Sync + 'static,
+        G: GenerateLocalNodeId,
     {
-        ServiceBuilder::new(rpc_server_bind_addr).finish(spawner)
+        ServiceBuilder::new(rpc_server_bind_addr).finish(spawner, local_id_gen)
     }
 
     /// Returns the handle of the service.
@@ -251,7 +240,7 @@ pub struct ServiceHandle<M: MessagePayload> {
     command_tx: mpsc::Sender<Command<M>>,
     rpc_service: RpcClientServiceHandle,
     local_nodes: LocalNodes<M>,
-    next_local_id: Arc<AtomicUsize>,
+    local_id_gen: ArcLocalNodeIdGenerator,
     metrics: ServiceMetrics,
     metric_builder: Arc<Mutex<MetricBuilder>>,
 }
@@ -280,7 +269,7 @@ impl<M: MessagePayload> ServiceHandle<M> {
     }
 
     pub(crate) fn generate_node_id(&self) -> NodeId {
-        let local_id = LocalNodeId::new(self.next_local_id.fetch_add(1, Ordering::SeqCst) as u64);
+        let local_id = self.local_id_gen.generate_local_node_id();
         NodeId::new(self.server_addr, local_id)
     }
 
