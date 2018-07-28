@@ -62,3 +62,58 @@ pub mod service;
 
 /// This crate specific `Result` type.
 pub type Result<T> = std::result::Result<T, Error>;
+
+#[cfg(test)]
+mod tests {
+    use fibers::{Executor, Spawn, ThreadPoolExecutor};
+    use futures::{Future, Stream};
+
+    use node::{Node, SerialLocalNodeIdGenerator};
+    use service::Service;
+
+    #[test]
+    fn it_works() {
+        let server_addr = "127.0.0.1:12121".parse().unwrap();
+        let mut executor = ThreadPoolExecutor::new().unwrap();
+        let service = Service::<String>::new(
+            server_addr,
+            executor.handle(),
+            SerialLocalNodeIdGenerator::new(),
+        );
+        let service_handle = service.handle();
+        executor.spawn(service.map_err(|e| panic!("{}", e)));
+
+        let mut fibers = Vec::new();
+        let mut first_node_id = None;
+        for i in 0..100 {
+            let mut node = Node::new(service_handle.clone());
+            if let Some(id) = first_node_id {
+                node.join(id);
+            } else {
+                first_node_id = Some(node.id());
+            }
+            if i == 99 {
+                node.broadcast("hello".to_owned());
+            }
+            let spawner = executor.handle();
+            let fiber = executor.spawn_monitor(
+                node.into_future()
+                    .map(move |(message, stream)| {
+                        spawner.spawn(stream.for_each(|_| Ok(())).map_err(|_| ()));
+                        message.map(|m| m.into_payload())
+                    })
+                    .map_err(|(e, _)| e),
+            );
+            fibers.push(fiber);
+        }
+
+        for fiber in fibers {
+            match executor.run_fiber(fiber).unwrap() {
+                Err(e) => panic!("{}", e),
+                Ok(message) => {
+                    assert_eq!(message, Some("hello".to_owned()));
+                }
+            }
+        }
+    }
+}
