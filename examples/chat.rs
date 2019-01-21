@@ -37,12 +37,10 @@ fn main() -> Result<(), MainError> {
         )
         .get_matches();
     let log_level = track_any_err!(matches.value_of("LOG_LEVEL").unwrap().parse())?;
-    let logger = track!(
-        TerminalLoggerBuilder::new()
-            .destination(Destination::Stderr)
-            .level(log_level)
-            .build()
-    )?;
+    let logger = track!(TerminalLoggerBuilder::new()
+        .destination(Destination::Stderr)
+        .level(log_level)
+        .build())?;
     let port = matches.value_of("PORT").unwrap();
     let addr: SocketAddr = track_any_err!(format!("127.0.0.1:{}", port).parse())?;
 

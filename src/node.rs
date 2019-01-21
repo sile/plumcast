@@ -114,7 +114,7 @@ impl NodeBuilder {
     /// [`Node`]: ./struct.Node.html
     pub fn finish<M: MessagePayload>(&self, service: ServiceHandle<M>) -> Node<M> {
         let id = service.generate_node_id();
-        let logger = self.logger.new(o!{"node_id" => id.to_string()});
+        let logger = self.logger.new(o! {"node_id" => id.to_string()});
         let metrics = NodeMetrics::new(service.metric_builder());
         let (message_tx, message_rx) = mpsc::channel();
         let handle = NodeHandle {

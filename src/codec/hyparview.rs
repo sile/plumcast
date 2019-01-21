@@ -227,10 +227,9 @@ impl Encode for NeighborMessageEncoder {
     fn start_encoding(&mut self, item: Self::Item) -> Result<()> {
         track!(self.destination.start_encoding(item.0))?;
         track!(self.sender.start_encoding(item.1.sender))?;
-        track!(
-            self.high_priority
-                .start_encoding(item.1.high_priority as u8)
-        )?;
+        track!(self
+            .high_priority
+            .start_encoding(item.1.high_priority as u8))?;
         Ok(())
     }
 
