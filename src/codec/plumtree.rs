@@ -348,7 +348,7 @@ impl Encode for MessageIdEncoder {
     }
 
     fn start_encoding(&mut self, item: Self::Item) -> Result<()> {
-        track!(self.node.start_encoding(item.node().clone()))?;
+        track!(self.node.start_encoding(item.node()))?;
         track!(self.seqno.start_encoding(item.seqno()))?;
         Ok(())
     }

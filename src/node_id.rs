@@ -1,3 +1,4 @@
+use std::cmp::Ordering;
 use std::fmt;
 use std::net::SocketAddr;
 
@@ -56,5 +57,19 @@ impl fmt::Debug for NodeId {
 impl fmt::Display for NodeId {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         write!(f, "{:08x}@{}", self.local_id.0, self.address)
+    }
+}
+impl PartialOrd for NodeId {
+    fn partial_cmp(&self, other: &Self) -> Option<Ordering> {
+        Some(self.cmp(other))
+    }
+}
+impl Ord for NodeId {
+    fn cmp(&self, other: &Self) -> Ordering {
+        self.address
+            .ip()
+            .cmp(&other.address.ip())
+            .then_with(|| self.address.port().cmp(&other.address.port()))
+            .then_with(|| self.local_id.cmp(&other.local_id))
     }
 }

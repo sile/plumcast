@@ -49,15 +49,15 @@ impl<T: MessagePayload> Message<T> {
 /// even if OS processes are frequently restarted.
 ///
 /// [`NodeId`]: ../node/struct.NodeId.html
-#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+#[derive(Debug, Clone, PartialEq, Eq, Hash, PartialOrd, Ord)]
 pub struct MessageId {
     node: NodeId,
     seqno: u64,
 }
 impl MessageId {
     /// Returns the node identifier part of the message identifier.
-    pub fn node(&self) -> &NodeId {
-        &self.node
+    pub fn node(&self) -> NodeId {
+        self.node
     }
 
     /// Returns the sequence number part of the message identifier.
