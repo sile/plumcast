@@ -1,6 +1,13 @@
 //! [`Service`] and related components.
 //!
 //! [`Service`]: ./struct.Service.html
+use crate::message::MessagePayload;
+use crate::metrics::{NodeMetrics, ServiceMetrics};
+use crate::misc::ArcSpawn;
+use crate::node::{GenerateLocalNodeId, LocalNodeId, NodeHandle, NodeId};
+use crate::node_id_generator::ArcLocalNodeIdGenerator;
+use crate::rpc::{self, RpcMessage};
+use crate::{Error, ErrorKind, Result};
 use atomic_immut::AtomicImmut;
 use fibers::sync::mpsc;
 use fibers::Spawn;
@@ -15,14 +22,6 @@ use slog::{Discard, Logger};
 use std::collections::HashMap;
 use std::net::SocketAddr;
 use std::sync::{Arc, Mutex};
-
-use message::MessagePayload;
-use metrics::{NodeMetrics, ServiceMetrics};
-use misc::ArcSpawn;
-use node::{GenerateLocalNodeId, LocalNodeId, NodeHandle, NodeId};
-use node_id_generator::ArcLocalNodeIdGenerator;
-use rpc::{self, RpcMessage};
-use {Error, ErrorKind, Result};
 
 type LocalNodes<M> = Arc<AtomicImmut<HashMap<LocalNodeId, NodeHandle<M>>>>;
 
@@ -312,46 +311,46 @@ impl<M: MessagePayload> ServiceHandle<M> {
     pub(crate) fn send_message(&self, peer: NodeId, message: RpcMessage<M>) -> Result<()> {
         match message {
             RpcMessage::Hyparview(m) => {
+                use crate::rpc::hyparview as hv;
                 use hyparview::message::ProtocolMessage;
-                use rpc::hyparview;
 
                 match m {
                     ProtocolMessage::Join(m) => {
-                        track!(hyparview::join_cast(peer, m, &self.rpc_service))?;
+                        track!(hv::join_cast(peer, m, &self.rpc_service))?;
                     }
                     ProtocolMessage::ForwardJoin(m) => {
-                        track!(hyparview::forward_join_cast(peer, m, &self.rpc_service))?;
+                        track!(hv::forward_join_cast(peer, m, &self.rpc_service))?;
                     }
                     ProtocolMessage::Neighbor(m) => {
-                        track!(hyparview::neighbor_cast(peer, m, &self.rpc_service))?;
+                        track!(hv::neighbor_cast(peer, m, &self.rpc_service))?;
                     }
                     ProtocolMessage::Shuffle(m) => {
-                        track!(hyparview::shuffle_cast(peer, m, &self.rpc_service))?;
+                        track!(hv::shuffle_cast(peer, m, &self.rpc_service))?;
                     }
                     ProtocolMessage::ShuffleReply(m) => {
-                        track!(hyparview::shuffle_reply_cast(peer, m, &self.rpc_service))?;
+                        track!(hv::shuffle_reply_cast(peer, m, &self.rpc_service))?;
                     }
                     ProtocolMessage::Disconnect(m) => {
-                        track!(hyparview::disconnect_cast(peer, m, &self.rpc_service))?;
+                        track!(hv::disconnect_cast(peer, m, &self.rpc_service))?;
                     }
                 }
             }
             RpcMessage::Plumtree(m) => {
+                use crate::rpc::plumtree as pt;
                 use plumtree::message::ProtocolMessage;
-                use rpc::plumtree;
 
                 match m {
                     ProtocolMessage::Gossip(m) => {
-                        track!(plumtree::gossip_cast(peer, m, &self.rpc_service))?;
+                        track!(pt::gossip_cast(peer, m, &self.rpc_service))?;
                     }
                     ProtocolMessage::Ihave(m) => {
-                        track!(plumtree::ihave_cast(peer, m, &self.rpc_service))?;
+                        track!(pt::ihave_cast(peer, m, &self.rpc_service))?;
                     }
                     ProtocolMessage::Graft(m) => {
-                        track!(plumtree::graft_cast(peer, m, &self.rpc_service))?;
+                        track!(pt::graft_cast(peer, m, &self.rpc_service))?;
                     }
                     ProtocolMessage::Prune(m) => {
-                        track!(plumtree::prune_cast(peer, m, &self.rpc_service))?;
+                        track!(pt::prune_cast(peer, m, &self.rpc_service))?;
                     }
                 }
             }

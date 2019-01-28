@@ -1,5 +1,5 @@
-use message::MessagePayload;
-use misc::{HyparviewMessage, PlumtreeMessage};
+use crate::message::MessagePayload;
+use crate::misc::{HyparviewMessage, PlumtreeMessage};
 
 pub mod hyparview;
 pub mod plumtree;

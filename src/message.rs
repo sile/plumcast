@@ -1,11 +1,10 @@
 //! [`Message`] and related components.
 //!
 //! [`Message`]: ./struct.Message.html
+use crate::misc::PlumtreeAppMessage;
+use crate::node::NodeId;
 use bytecodec::bytes::{BytesEncoder, RemainingBytesDecoder, Utf8Decoder, Utf8Encoder};
 use bytecodec::{Decode, Encode};
-
-use misc::PlumtreeAppMessage;
-use node::NodeId;
 
 /// Broadcasted application message.
 #[derive(Debug, Clone)]

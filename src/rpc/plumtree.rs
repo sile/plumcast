@@ -1,19 +1,18 @@
-use fibers_rpc::client::ClientServiceHandle;
-use fibers_rpc::server::{HandleCast, NoReply, ServerBuilder};
-use fibers_rpc::{Cast, ProcedureId};
-use std::marker::PhantomData;
-
 use super::RpcMessage;
-use codec::plumtree::{
+use crate::codec::plumtree::{
     GossipMessageDecoder, GossipMessageEncoder, GraftMessageDecoder, GraftMessageEncoder,
     GraftOptimizeMessageDecoder, GraftOptimizeMessageEncoder, IhaveMessageDecoder,
     IhaveMessageEncoder, PruneMessageDecoder, PruneMessageEncoder,
 };
-use message::MessagePayload;
-use misc::{GossipMessage, GraftMessage, IhaveMessage, PruneMessage};
-use node::{LocalNodeId, NodeId};
-use service::ServiceHandle;
-use Result;
+use crate::message::MessagePayload;
+use crate::misc::{GossipMessage, GraftMessage, IhaveMessage, PruneMessage};
+use crate::node::{LocalNodeId, NodeId};
+use crate::service::ServiceHandle;
+use crate::Result;
+use fibers_rpc::client::ClientServiceHandle;
+use fibers_rpc::server::{HandleCast, NoReply, ServerBuilder};
+use fibers_rpc::{Cast, ProcedureId};
+use std::marker::PhantomData;
 
 const MAX_QUEUE_LEN: u64 = 4096; // FIXME: parameterize
 

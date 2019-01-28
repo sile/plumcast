@@ -31,16 +31,8 @@
 //! [HyParView]: http://asc.di.fct.unl.pt/~jleitao/pdf/dsn07-leitao.pdf
 //! [Plumtree]: http://www.gsd.inesc-id.pt/~ler/reports/srds07.pdf
 #![warn(missing_docs)]
-extern crate atomic_immut;
 #[macro_use]
 extern crate bytecodec;
-extern crate fibers;
-extern crate fibers_rpc;
-extern crate futures;
-extern crate hyparview;
-extern crate plumtree;
-extern crate prometrics;
-extern crate rand;
 #[macro_use]
 extern crate slog;
 #[macro_use]
@@ -65,23 +57,21 @@ pub type Result<T> = std::result::Result<T, Error>;
 
 #[cfg(test)]
 mod tests {
-    use fibers::{Executor, Spawn, ThreadPoolExecutor};
+    use crate::node::{Node, SerialLocalNodeIdGenerator};
+    use crate::service::Service;
+    use fibers::Spawn;
     use futures::{Future, Stream};
-
-    use node::{Node, SerialLocalNodeIdGenerator};
-    use service::Service;
 
     #[test]
     fn it_works() {
         let server_addr = "127.0.0.1:12121".parse().unwrap();
-        let mut executor = ThreadPoolExecutor::new().unwrap();
         let service = Service::<String>::new(
             server_addr,
-            executor.handle(),
+            fibers_global::handle(),
             SerialLocalNodeIdGenerator::new(),
         );
         let service_handle = service.handle();
-        executor.spawn(service.map_err(|e| panic!("{}", e)));
+        fibers_global::spawn(service.map_err(|e| panic!("{}", e)));
 
         let mut fibers = Vec::new();
         let mut first_node_id = None;
@@ -95,8 +85,8 @@ mod tests {
             if i == 99 {
                 node.broadcast("hello".to_owned());
             }
-            let spawner = executor.handle();
-            let fiber = executor.spawn_monitor(
+            let spawner = fibers_global::handle();
+            let fiber = fibers_global::spawn_monitor(
                 node.into_future()
                     .map(move |(message, stream)| {
                         spawner.spawn(stream.for_each(|_| Ok(())).map_err(|_| ()));
@@ -108,7 +98,7 @@ mod tests {
         }
 
         for fiber in fibers {
-            match executor.run_fiber(fiber).unwrap() {
+            match fibers_global::execute(fiber) {
                 Err(e) => panic!("{}", e),
                 Ok(message) => {
                     assert_eq!(message, Some("hello".to_owned()));

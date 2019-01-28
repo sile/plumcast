@@ -1,15 +1,14 @@
+use super::node::{LocalNodeIdDecoder, LocalNodeIdEncoder, NodeIdDecoder, NodeIdEncoder};
+use crate::misc::{
+    DisconnectMessage, ForwardJoinMessage, JoinMessage, NeighborMessage, ShuffleMessage,
+    ShuffleReplyMessage,
+};
+use crate::node::{LocalNodeId, NodeId};
 use bytecodec::combinator::{Collect, Repeat};
 use bytecodec::fixnum::{U8Decoder, U8Encoder};
 use bytecodec::{ByteCount, Decode, Encode, Eos, Result, SizedEncode};
 use hyparview::TimeToLive;
 use std;
-
-use super::node::{LocalNodeIdDecoder, LocalNodeIdEncoder, NodeIdDecoder, NodeIdEncoder};
-use misc::{
-    DisconnectMessage, ForwardJoinMessage, JoinMessage, NeighborMessage, ShuffleMessage,
-    ShuffleReplyMessage,
-};
-use node::{LocalNodeId, NodeId};
 
 #[derive(Debug, Default)]
 pub struct JoinMessageDecoder {

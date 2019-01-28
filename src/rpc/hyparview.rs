@@ -1,22 +1,21 @@
-use fibers_rpc::client::ClientServiceHandle;
-use fibers_rpc::server::{HandleCast, NoReply, ServerBuilder};
-use fibers_rpc::{Cast, ProcedureId};
-
 use super::RpcMessage;
-use codec::hyparview::{
+use crate::codec::hyparview::{
     DisconnectMessageDecoder, DisconnectMessageEncoder, ForwardJoinMessageDecoder,
     ForwardJoinMessageEncoder, JoinMessageDecoder, JoinMessageEncoder, NeighborMessageDecoder,
     NeighborMessageEncoder, ShuffleMessageDecoder, ShuffleMessageEncoder,
     ShuffleReplyMessageDecoder, ShuffleReplyMessageEncoder,
 };
-use message::MessagePayload;
-use misc::{
+use crate::message::MessagePayload;
+use crate::misc::{
     DisconnectMessage, ForwardJoinMessage, JoinMessage, NeighborMessage, ShuffleMessage,
     ShuffleReplyMessage,
 };
-use node::{LocalNodeId, NodeId};
-use service::ServiceHandle;
-use Result;
+use crate::node::{LocalNodeId, NodeId};
+use crate::service::ServiceHandle;
+use crate::Result;
+use fibers_rpc::client::ClientServiceHandle;
+use fibers_rpc::server::{HandleCast, NoReply, ServerBuilder};
+use fibers_rpc::{Cast, ProcedureId};
 
 pub fn register_handlers<M: MessagePayload>(rpc: &mut ServerBuilder, service: &ServiceHandle<M>) {
     rpc.add_cast_handler(JoinHandler(service.clone()));

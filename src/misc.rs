@@ -1,15 +1,14 @@
 //! Miscellaneous components.
+use crate::message::{MessageId, MessagePayload};
+use crate::node::NodeId;
 use fibers::Spawn;
 use futures::Future;
 use hyparview;
 use plumtree;
-use rand::StdRng;
+use rand::rngs::StdRng;
 use std::fmt;
 use std::marker::PhantomData;
 use std::sync::Arc;
-
-use message::{MessageId, MessagePayload};
-use node::NodeId;
 
 type ArcFn = Arc<Fn(Box<Future<Item = (), Error = ()> + Send>) + Send + Sync + 'static>;
 

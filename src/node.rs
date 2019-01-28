@@ -1,28 +1,28 @@
 //! [`Node`] and related components.
 //!
 //! [`Node`]: ./node/struct.Node.html
+use crate::message::{Message, MessageId, MessagePayload};
+use crate::metrics::NodeMetrics;
+use crate::misc::{
+    HyparviewAction, HyparviewNode, HyparviewNodeOptions, PlumtreeAction, PlumtreeNode,
+    PlumtreeNodeOptions,
+};
+use crate::rpc::RpcMessage;
+use crate::service::ServiceHandle;
+use crate::{Error, ErrorKind};
 use fibers::sync::mpsc;
 use fibers::time::timer::{self, Timeout};
 use futures::{Async, Future, Poll, Stream};
 use plumtree::message::Message as PlumtreeAppMessage;
 use plumtree::time::{Clock, NodeTime};
-use rand::{self, Rng, SeedableRng, StdRng};
+use rand::rngs::StdRng;
+use rand::{self, Rng, SeedableRng};
 use slog::{Discard, Logger};
 use std::fmt;
 use std::time::Duration;
 
-use message::{Message, MessageId, MessagePayload};
-use metrics::NodeMetrics;
-use misc::{
-    HyparviewAction, HyparviewNode, HyparviewNodeOptions, PlumtreeAction, PlumtreeNode,
-    PlumtreeNodeOptions,
-};
-use rpc::RpcMessage;
-use service::ServiceHandle;
-use {Error, ErrorKind};
-
-pub use node_id::{LocalNodeId, NodeId};
-pub use node_id_generator::{
+pub use crate::node_id::{LocalNodeId, NodeId};
+pub use crate::node_id_generator::{
     GenerateLocalNodeId, SerialLocalNodeIdGenerator, UnixtimeLocalNodeIdGenerator,
 };
 

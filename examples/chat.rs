@@ -1,11 +1,5 @@
 #[macro_use]
 extern crate clap;
-extern crate fibers;
-extern crate fibers_rpc;
-extern crate futures;
-extern crate plumcast;
-extern crate slog;
-extern crate sloggers;
 #[macro_use]
 extern crate trackable;
 

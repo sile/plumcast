@@ -1,8 +1,7 @@
+use super::net::{SocketAddrDecoder, SocketAddrEncoder};
+use crate::node::{LocalNodeId, NodeId};
 use bytecodec::fixnum::{U64beDecoder, U64beEncoder};
 use bytecodec::{ByteCount, Decode, Encode, Eos, Result, SizedEncode};
-
-use super::net::{SocketAddrDecoder, SocketAddrEncoder};
-use node::{LocalNodeId, NodeId};
 
 #[derive(Debug, Default)]
 pub struct LocalNodeIdDecoder(U64beDecoder);

@@ -1,9 +1,8 @@
+use crate::node::LocalNodeId;
 use std::fmt;
 use std::sync::atomic::{AtomicUsize, Ordering};
 use std::sync::Arc;
 use std::time::UNIX_EPOCH;
-
-use node::LocalNodeId;
 
 /// This trait allows for generating the identifiers of the local nodes that belong to a [`Service`].
 ///

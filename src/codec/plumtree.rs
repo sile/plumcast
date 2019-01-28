@@ -1,3 +1,7 @@
+use super::node::{LocalNodeIdDecoder, LocalNodeIdEncoder, NodeIdDecoder, NodeIdEncoder};
+use crate::message::{MessageId, MessagePayload};
+use crate::misc::{GossipMessage, GraftMessage, IhaveMessage, PlumtreeAppMessage, PruneMessage};
+use crate::node::LocalNodeId;
 use bytecodec::bytes::{BytesDecoder, BytesEncoder};
 use bytecodec::combinator::Peekable;
 use bytecodec::fixnum::{
@@ -7,11 +11,6 @@ use bytecodec::fixnum::{
 use bytecodec::{ByteCount, Decode, Encode, Eos, ErrorKind, Result, SizedEncode};
 use std::fmt;
 use std::marker::PhantomData;
-
-use super::node::{LocalNodeIdDecoder, LocalNodeIdEncoder, NodeIdDecoder, NodeIdEncoder};
-use message::{MessageId, MessagePayload};
-use misc::{GossipMessage, GraftMessage, IhaveMessage, PlumtreeAppMessage, PruneMessage};
-use node::LocalNodeId;
 
 pub struct GossipMessageDecoder<M: MessagePayload> {
     destination: LocalNodeIdDecoder,
