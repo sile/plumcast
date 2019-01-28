@@ -198,7 +198,7 @@ impl<M: MessagePayload> Node<M> {
     /// Broadcasts a message.
     ///
     /// Note that the message will also be delivered to the sender node.
-    pub fn broadcast(&mut self, message_payload: M) {
+    pub fn broadcast(&mut self, message_payload: M) -> MessageId {
         let id = MessageId::new(self.id(), self.message_seqno);
         self.message_seqno += 1;
         debug!(self.logger, "Starts broadcasting a message: {:?}", id);
@@ -208,7 +208,8 @@ impl<M: MessagePayload> Node<M> {
             payload: message_payload,
         };
         self.plumtree_node.broadcast_message(m);
-        self.metrics.broadcasted_messages.increment()
+        self.metrics.broadcasted_messages.increment();
+        id
     }
 
     /// Forgets the specified message.

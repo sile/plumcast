@@ -49,7 +49,7 @@ impl<T: MessagePayload> Message<T> {
 /// even if OS processes are frequently restarted.
 ///
 /// [`NodeId`]: ../node/struct.NodeId.html
-#[derive(Debug, Clone, PartialEq, Eq, Hash, PartialOrd, Ord)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, PartialOrd, Ord)]
 pub struct MessageId {
     node: NodeId,
     seqno: u64,
