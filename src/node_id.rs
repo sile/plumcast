@@ -1,3 +1,5 @@
+#[cfg(feature = "serialize")]
+use serde_derive::{Deserialize, Serialize};
 use std::cmp::Ordering;
 use std::fmt;
 use std::net::SocketAddr;
@@ -8,6 +10,7 @@ use std::net::SocketAddr;
 ///
 /// [`Node`]: ./struct.Node.html
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, PartialOrd, Ord)]
+#[cfg_attr(feature = "serialize", derive(Serialize, Deserialize))]
 pub struct LocalNodeId(u64);
 impl LocalNodeId {
     /// Makes a new `LocalNodeId` instance.
@@ -29,6 +32,7 @@ impl LocalNodeId {
 /// [`Node`]: ./struct.Node.html
 /// [`LocalNodeId`]: ./struct.LocalNodeId.html
 #[derive(Clone, Copy, PartialEq, Eq, Hash)]
+#[cfg_attr(feature = "serialize", derive(Serialize, Deserialize))]
 pub struct NodeId {
     address: SocketAddr,
     local_id: LocalNodeId,
