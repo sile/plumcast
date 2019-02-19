@@ -66,6 +66,11 @@ impl ServiceBuilder {
         self
     }
 
+    /// Returns a mutable reference to the RPC server builder.
+    pub fn rpc_server_builder_mut(&mut self) -> &mut RpcServerBuilder {
+        &mut self.rpc_server_builder
+    }
+
     /// Builds a [`Service`] with the given settings.
     ///
     /// [`Service`]: ./struct.Service.html
