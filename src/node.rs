@@ -332,17 +332,19 @@ impl<M: MessagePayload> Node<M> {
         }
     }
 
-    fn handle_rpc_message(&mut self, message: RpcMessage<M>) {
+    fn handle_rpc_message(&mut self, message: RpcMessage<M>) -> bool {
         match message {
             RpcMessage::Hyparview(m) => {
                 debug!(self.logger, "Received a HyParView message: {:?}", m);
                 self.hyparview_node.handle_protocol_message(m);
+                true
             }
             RpcMessage::Plumtree(m) => {
                 debug!(self.logger, "Received a Plumtree message");
                 if !self.plumtree_node.handle_protocol_message(m) {
                     self.metrics.unknown_plumtree_node_errors.increment();
                 }
+                false
             }
         }
     }
@@ -414,9 +416,11 @@ impl<M: MessagePayload> Stream for Node<M> {
                 did_something = true;
             }
             while let Async::Ready(message) = self.message_rx.poll().expect("Never fails") {
-                let message = track_assert_some!(message, ErrorKind::Other, "Service down");
-                self.handle_rpc_message(message);
                 did_something = true;
+                let message = track_assert_some!(message, ErrorKind::Other, "Service down");
+                if self.handle_rpc_message(message) {
+                    break;
+                }
             }
         }
         Ok(Async::NotReady)
