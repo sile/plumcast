@@ -10,7 +10,7 @@ use std::fmt;
 use std::marker::PhantomData;
 use std::sync::Arc;
 
-type ArcFn = Arc<Fn(Box<Future<Item = (), Error = ()> + Send>) + Send + Sync + 'static>;
+type ArcFn = Arc<dyn Fn(Box<dyn Future<Item = (), Error = ()> + Send>) + Send + Sync + 'static>;
 
 /// Sharable [`Spawn`].
 ///
@@ -26,7 +26,7 @@ impl ArcSpawn {
     }
 }
 impl Spawn for ArcSpawn {
-    fn spawn_boxed(&self, fiber: Box<Future<Item = (), Error = ()> + Send>) {
+    fn spawn_boxed(&self, fiber: Box<dyn Future<Item = (), Error = ()> + Send>) {
         (self.0)(fiber);
     }
 }

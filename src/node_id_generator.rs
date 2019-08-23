@@ -15,7 +15,7 @@ pub trait GenerateLocalNodeId: Send + Sync + 'static {
 }
 
 #[derive(Clone)]
-pub(crate) struct ArcLocalNodeIdGenerator(Arc<GenerateLocalNodeId>);
+pub(crate) struct ArcLocalNodeIdGenerator(Arc<dyn GenerateLocalNodeId>);
 impl ArcLocalNodeIdGenerator {
     pub(crate) fn new<T: GenerateLocalNodeId>(inner: T) -> Self {
         ArcLocalNodeIdGenerator(Arc::new(inner))
