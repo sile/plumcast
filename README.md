@@ -1,7 +1,7 @@
 plumcast
 ========
 
-[![plumcast](http://meritbadge.herokuapp.com/plumcast)](https://crates.io/crates/plumcast)
+[![plumcast](https://img.shields.io/crates/v/plumcast.svg)](https://crates.io/crates/plumcast)
 [![Documentation](https://docs.rs/plumcast/badge.svg)](https://docs.rs/plumcast)
 [![Build Status](https://travis-ci.org/sile/plumcast.svg?branch=master)](https://travis-ci.org/sile/plumcast)
 [![Code Coverage](https://codecov.io/gh/sile/plumcast/branch/master/graph/badge.svg)](https://codecov.io/gh/sile/plumcast/branch/master)
