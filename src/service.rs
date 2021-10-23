@@ -88,7 +88,7 @@ impl ServiceBuilder {
         let removed_nodes_metrics = NodeMetrics::new(self.metrics.clone());
         let handle = ServiceHandle {
             server_addr: self.server_addr,
-            command_tx: command_tx.clone(),
+            command_tx,
             rpc_service: rpc_client_service.handle(),
             local_nodes: Default::default(),
             local_id_gen: ArcLocalNodeIdGenerator::new(local_id_gen),
@@ -298,7 +298,7 @@ impl<M: MessagePayload> ServiceHandle<M> {
                 alive: false,
             };
             let message = ProtocolMessage::Disconnect(message);
-            let _ = self.send_message(sender.clone(), RpcMessage::Hyparview(message));
+            let _ = self.send_message(*sender, RpcMessage::Hyparview(message));
             None
         }
     }

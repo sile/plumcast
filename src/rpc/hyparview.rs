@@ -38,7 +38,7 @@ impl Cast for JoinCast {
 }
 
 pub fn join_cast(peer: NodeId, m: JoinMessage, service: &ClientServiceHandle) -> Result<()> {
-    let mut client = JoinCast::client(&service);
+    let mut client = JoinCast::client(service);
     client.options_mut().force_wakeup = true;
     client.options_mut().priority = 100;
     track!(client.cast(peer.address(), (peer.local_id(), m)))?;
@@ -72,7 +72,7 @@ pub fn forward_join_cast(
     m: ForwardJoinMessage,
     service: &ClientServiceHandle,
 ) -> Result<()> {
-    let mut client = ForwardJoinCast::client(&service);
+    let mut client = ForwardJoinCast::client(service);
     client.options_mut().force_wakeup = true;
     client.options_mut().priority = 100;
     track!(client.cast(peer.address(), (peer.local_id(), m)))?;
@@ -106,7 +106,7 @@ pub fn neighbor_cast(
     m: NeighborMessage,
     service: &ClientServiceHandle,
 ) -> Result<()> {
-    let mut client = NeighborCast::client(&service);
+    let mut client = NeighborCast::client(service);
     client.options_mut().force_wakeup = true;
     client.options_mut().priority = 100;
     track!(client.cast(peer.address(), (peer.local_id(), m)))?;
@@ -136,7 +136,7 @@ impl Cast for ShuffleCast {
 }
 
 pub fn shuffle_cast(peer: NodeId, m: ShuffleMessage, service: &ClientServiceHandle) -> Result<()> {
-    let mut client = ShuffleCast::client(&service);
+    let mut client = ShuffleCast::client(service);
     client.options_mut().priority = 200;
     track!(client.cast(peer.address(), (peer.local_id(), m)))?;
     Ok(())
@@ -169,7 +169,7 @@ pub fn shuffle_reply_cast(
     m: ShuffleReplyMessage,
     service: &ClientServiceHandle,
 ) -> Result<()> {
-    let mut client = ShuffleReplyCast::client(&service);
+    let mut client = ShuffleReplyCast::client(service);
     client.options_mut().priority = 200;
     track!(client.cast(peer.address(), (peer.local_id(), m)))?;
     Ok(())
@@ -202,7 +202,7 @@ pub fn disconnect_cast(
     m: DisconnectMessage,
     service: &ClientServiceHandle,
 ) -> Result<()> {
-    let client = DisconnectCast::client(&service);
+    let client = DisconnectCast::client(service);
     track!(client.cast(peer.address(), (peer.local_id(), m)))?;
     Ok(())
 }
