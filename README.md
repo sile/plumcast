@@ -3,8 +3,8 @@ plumcast
 
 [![plumcast](https://img.shields.io/crates/v/plumcast.svg)](https://crates.io/crates/plumcast)
 [![Documentation](https://docs.rs/plumcast/badge.svg)](https://docs.rs/plumcast)
-[![Build Status](https://travis-ci.org/sile/plumcast.svg?branch=master)](https://travis-ci.org/sile/plumcast)
-[![Code Coverage](https://codecov.io/gh/sile/plumcast/branch/master/graph/badge.svg)](https://codecov.io/gh/sile/plumcast/branch/master)
+[![Actions Status](https://github.com/sile/plumcast/workflows/CI/badge.svg)](https://github.com/sile/plumcast/actions)
+[![Coverage Status](https://coveralls.io/repos/github/sile/plumcast/badge.svg?branch=master)](https://coveralls.io/github/sile/plumcast?branch=master)
 [![License: MIT](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
 
 A message broadcasting library based on the Plumtree/HyParView algorithms.

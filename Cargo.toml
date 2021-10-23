@@ -10,8 +10,7 @@ license = "MIT"
 edition = "2018"
 
 [badges]
-travis-ci = {repository = "sile/plumcast"}
-codecov = {repository = "sile/plumcast"}
+coveralls = {repository = "sile/plumcast"}
 
 [features]
 serialize = ["serde", "serde_derive"]
