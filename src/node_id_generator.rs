@@ -110,7 +110,6 @@ impl GenerateLocalNodeId for UnixtimeLocalNodeIdGenerator {
 
 #[cfg(test)]
 mod tests {
-    
 
     use super::*;
 
