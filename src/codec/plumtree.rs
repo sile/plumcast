@@ -162,6 +162,7 @@ impl Decode for MessageIdDecoder {
     }
 }
 
+#[allow(dead_code)]
 #[derive(Debug, Default)]
 struct MessagePayloadDecoder {
     size: Peekable<U32beDecoder>,
@@ -369,6 +370,7 @@ impl SizedEncode for MessageIdEncoder {
     }
 }
 
+#[allow(dead_code)]
 #[derive(Debug, Default)]
 struct MessagePayloadEncoder {
     size: U32beEncoder,

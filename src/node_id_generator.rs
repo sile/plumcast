@@ -63,8 +63,8 @@ impl SerialLocalNodeIdGenerator {
     /// ```
     /// use plumcast::node::{GenerateLocalNodeId, SerialLocalNodeIdGenerator};
     ///
-    /// let mut generator = SerialLocalNodeIdGenerator::with_offset(std::u64::MAX);
-    /// assert_eq!(generator.generate_local_node_id().value(), std::u64::MAX);
+    /// let mut generator = SerialLocalNodeIdGenerator::with_offset(u64::MAX);
+    /// assert_eq!(generator.generate_local_node_id().value(), u64::MAX);
     /// assert_eq!(generator.generate_local_node_id().value(), 0);
     /// assert_eq!(generator.generate_local_node_id().value(), 1);
     /// ```
@@ -110,7 +110,7 @@ impl GenerateLocalNodeId for UnixtimeLocalNodeIdGenerator {
 
 #[cfg(test)]
 mod tests {
-    use std;
+    
 
     use super::*;
 
@@ -121,8 +121,8 @@ mod tests {
         assert_eq!(generator.generate_local_node_id().value(), 1);
         assert_eq!(generator.generate_local_node_id().value(), 2);
 
-        let generator = SerialLocalNodeIdGenerator::with_offset(std::u64::MAX);
-        assert_eq!(generator.generate_local_node_id().value(), std::u64::MAX);
+        let generator = SerialLocalNodeIdGenerator::with_offset(u64::MAX);
+        assert_eq!(generator.generate_local_node_id().value(), u64::MAX);
         assert_eq!(generator.generate_local_node_id().value(), 0);
         assert_eq!(generator.generate_local_node_id().value(), 1);
     }
